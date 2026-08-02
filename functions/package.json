@@ -1,0 +1,21 @@
+{
+  "name": "voice-recorder-ai-functions",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.2",
+    "firebase-functions": "^6.1.1",
+    "openai": "^4.77.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": "22"
+  }
+}
