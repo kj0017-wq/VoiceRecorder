@@ -683,12 +683,12 @@ function AuthScreen({ onNotice, notice }: { onNotice: (message: string) => void;
             placeholder="Mindestens 6 Zeichen"
           />
         </label>
-        <button className="primary-action wide-action" disabled={isBusy} onClick={() => submit("register")}>
+        <button className="primary-action wide-action" disabled={isBusy} onClick={() => submit("login")}>
           {isBusy ? <Loader2 className="spin" size={20} aria-hidden="true" /> : null}
-          Konto erstellen
-        </button>
-        <button className="secondary-action wide-action" disabled={isBusy} onClick={() => submit("login")}>
           Einloggen
+        </button>
+        <button className="secondary-action wide-action" disabled={isBusy} onClick={() => submit("register")}>
+          Konto erstellen
         </button>
         <button className="link-action" disabled={isBusy} onClick={resetPassword}>
           Passwort zurücksetzen
