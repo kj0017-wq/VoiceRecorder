@@ -1434,19 +1434,22 @@ button {
 .notice {
   position: fixed;
   top: auto;
-  right: 18px;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 88px);
-  left: 18px;
+  right: 20px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 78px);
+  left: 20px;
   z-index: 80;
-  max-width: min(460px, calc(100vw - 36px));
+  max-width: min(520px, calc(100vw - 40px));
+  max-height: 54px;
   margin: 0 auto;
   border-radius: 8px;
-  padding: 10px 12px;
+  padding: 8px 10px;
+  overflow: hidden;
   color: #0f172a;
   background: #fde68a;
   box-shadow: 0 12px 36px rgba(15, 23, 42, 0.18);
-  font-size: 0.88rem;
+  font-size: 0.78rem;
   font-weight: 800;
+  line-height: 1.25;
   pointer-events: none;
 }
 

@@ -247,7 +247,7 @@ export function App() {
       const title = metadata.title.trim() || createFallbackTitle();
       const saved = await createRecordingFromAudio(blob, { ...metadata, title }, userId, duration);
       setSelectedId(saved.id);
-      setNotice(saved.shortSummary);
+      setNotice(saved.audioUrl ? "Aufnahme gespeichert und Verarbeitung gestartet." : "Aufnahme gespeichert.");
       setMode("home");
       recorder.discard();
       setMetadata({ title: createFallbackTitle(), category: "", project: "" });

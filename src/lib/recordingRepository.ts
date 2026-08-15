@@ -79,8 +79,7 @@ export async function createRecordingFromAudio(
   if (isLocalMode(userId)) {
     return createLocalRecording(file, {
       ...baseRecording,
-      shortSummary:
-        "Die Aufnahme wurde lokal im Browser gesichert. Nach Login und Upload-Verarbeitung wird sie in Firebase verarbeitet."
+      shortSummary: "Aufnahme gespeichert."
     });
   }
 
@@ -112,8 +111,7 @@ export async function createRecordingFromAudio(
   } catch {
     return createLocalRecording(file, {
       ...baseRecording,
-      shortSummary:
-        "Die Aufnahme wurde lokal gesichert. Für Cloud-Upload bitte zuerst mit einem Firebase-Benutzer anmelden."
+      shortSummary: "Aufnahme gespeichert."
     });
   }
 }
