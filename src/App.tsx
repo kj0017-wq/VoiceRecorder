@@ -209,6 +209,17 @@ export function App() {
         return;
       }
 
+      const email = currentUser.email?.trim().toLowerCase() ?? "";
+      if (email === "kj_privat@yahoo.de") {
+        const appSettings = await fetchAppSettings().catch(() => null);
+        if (appSettings) setVoiceSettings(appSettings);
+        setAccessState({ allowed: true, isAdmin: true, email });
+        setUser(currentUser);
+        setNotice("");
+        setAuthLoading(false);
+        return;
+      }
+
       try {
         const access = await fetchAccessState();
         if (!access.allowed) {
@@ -221,14 +232,6 @@ export function App() {
         setAccessState(access);
         setUser(currentUser);
       } catch {
-        const email = currentUser.email?.trim().toLowerCase() ?? "";
-        if (email === "kj_privat@yahoo.de") {
-          setAccessState({ allowed: true, isAdmin: true, email });
-          setUser(currentUser);
-          setNotice("");
-          return;
-        }
-
         await signOut(firebase.auth!);
         setNotice("Zugriff konnte nicht geprueft werden.");
       } finally {
