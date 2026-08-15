@@ -1114,7 +1114,6 @@ button {
 }
 
 .translation-controls {
-  grid-column: 1 / -1;
   flex: 2 1 360px;
   justify-content: flex-end;
 }
@@ -1125,6 +1124,12 @@ button {
   gap: 8px;
   width: 100%;
   justify-content: stretch;
+}
+
+.translation-controls-top select,
+.translation-controls-top button {
+  width: 100%;
+  max-width: 100%;
 }
 
 .translation-controls-legacy {
@@ -1428,17 +1433,19 @@ button {
 
 .notice {
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  top: auto;
   right: 18px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 88px);
   left: 18px;
-  z-index: 30;
+  z-index: 80;
   max-width: min(460px, calc(100vw - 36px));
   margin: 0 auto;
   border-radius: 8px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   color: #0f172a;
   background: #fde68a;
-  box-shadow: 0 16px 50px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.18);
+  font-size: 0.88rem;
   font-weight: 800;
   pointer-events: none;
 }
@@ -1514,6 +1521,10 @@ button {
   .simple-export,
   .compact-control-grid {
     width: 100%;
+  }
+
+  .translation-controls-top {
+    grid-template-columns: 1fr;
   }
 
   .admin-actions > *,
