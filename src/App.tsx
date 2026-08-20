@@ -425,7 +425,7 @@ export function App() {
 
   return (
     <main
-      className={`app-shell ${mode === "recording" && !settingsOpen ? "recorder-app-shell" : ""} ${batteryRecording ? "battery-mode" : ""} ${batteryDimmed ? "battery-dimmed" : ""}`}
+      className={`app-shell ${mode === "recording" && !settingsOpen ? "recorder-app-shell" : ""} ${mode === "latest" && !settingsOpen ? "latest-app-shell" : ""} ${batteryRecording ? "battery-mode" : ""} ${batteryDimmed ? "battery-dimmed" : ""}`}
       onClick={revealBatteryMode}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
@@ -565,7 +565,7 @@ export function App() {
       ) : !settingsOpen ? (
         <section className={`workspace recordings-workspace ${mode === "latest" ? "latest-workspace" : "archive-workspace"}`}>
           {mode === "latest" ? (
-            <section className="detail-panel clusters-panel">
+            <section className="detail-panel clusters-panel latest-detail-panel">
               <div className="cluster-list">
                 {latestRecording ? (
                   <RecordingCluster
