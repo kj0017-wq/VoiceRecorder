@@ -663,6 +663,13 @@ function AuthScreen({ onNotice, notice }: { onNotice: (message: string) => void;
     if (invitedEmail) setEmail(invitedEmail);
   }, []);
 
+  useEffect(() => {
+    const themeMeta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    const previousColor = themeMeta?.getAttribute("content") ?? "#f8fafc";
+    themeMeta?.setAttribute("content", "#000000");
+    return () => themeMeta?.setAttribute("content", previousColor);
+  }, []);
+
   async function submit(kind: "login" | "register") {
     if (!firebase.auth) return;
     setIsBusy(true);
@@ -703,7 +710,7 @@ function AuthScreen({ onNotice, notice }: { onNotice: (message: string) => void;
     <main className="app-shell auth-shell">
       <section className="auth-card">
         <div className="auth-icon">
-          <User size={26} aria-hidden="true" />
+          <AudioMark />
         </div>
         <div>
           <p className="eyebrow">Voice Recorder</p>
@@ -1261,7 +1268,7 @@ function LiveWaveform({ values }: { values: number[] }) {
     <div className="live-waveform" aria-hidden="true">
       <div className="waveform-zero-line" />
       {points.map((value, index) => {
-        const height = Math.max(3, Math.round(Math.abs(value) * 52));
+        const height = Math.max(3, Math.round(Math.abs(value) * 128));
         return <span key={`${index}-${height}`} style={{ height: `${height}px` }} />;
       })}
     </div>
