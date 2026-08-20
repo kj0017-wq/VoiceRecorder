@@ -1289,6 +1289,39 @@ button {
   min-height: 86px;
 }
 
+.archive-swipe-row {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  touch-action: pan-y;
+}
+
+.archive-swipe-card {
+  position: relative;
+  z-index: 2;
+  transition: transform 180ms ease;
+}
+
+.archive-swipe-row.is-delete-open .archive-swipe-card {
+  transform: translateX(-104px);
+}
+
+.archive-delete-action {
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: 1;
+  display: inline-flex;
+  width: 96px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 8px;
+  color: #ffffff;
+  background: #be123c;
+  font-weight: 900;
+}
+
 .recording-card em,
 .task-item em {
   justify-self: start;

@@ -599,19 +599,17 @@ export function App() {
               {filtered.length ? (
                 <div className="recording-list archive-only-list">
                   {filtered.map((recording) => (
-                    <button
+                    <ArchiveRecordingItem
                       key={recording.id}
-                      className={`recording-card compact-card ${selected?.id === recording.id ? "is-selected" : ""}`}
-                      onClick={() => {
+                      recording={recording}
+                      isSelected={selected?.id === recording.id}
+                      onOpen={() => {
                         setSelectedId(recording.id);
                         setOpenClusterId(recording.id);
                         setMode("latest");
                       }}
-                    >
-                      <span className={`status-dot status-${recording.status}`} />
-                      <strong>{recording.title}</strong>
-                      <span>{formatDateTime(recording.createdAt)} · {formatDuration(recording.duration)}</span>
-                    </button>
+                      onDelete={() => handleDelete(recording)}
+                    />
                   ))}
                 </div>
               ) : (
@@ -1216,6 +1214,69 @@ function RecordingCluster({
         </div>
       ) : null}
     </article>
+  );
+}
+
+function ArchiveRecordingItem({
+  recording,
+  isSelected,
+  onOpen,
+  onDelete
+}: {
+  recording: Recording;
+  isSelected: boolean;
+  onOpen: () => void;
+  onDelete: () => void;
+}) {
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+
+  function handleTouchStart(event: TouchEvent<HTMLDivElement>) {
+    event.stopPropagation();
+    const touch = event.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  }
+
+  function handleTouchEnd(event: TouchEvent<HTMLDivElement>) {
+    event.stopPropagation();
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start) return;
+
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    if (Math.abs(deltaX) < 42 || Math.abs(deltaX) < Math.abs(deltaY) * 1.25) return;
+
+    if (deltaX < 0) setIsDeleteOpen(true);
+    else setIsDeleteOpen(false);
+  }
+
+  return (
+    <div
+      className={`archive-swipe-row ${isDeleteOpen ? "is-delete-open" : ""}`}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      <button className="archive-delete-action" onClick={onDelete} aria-label={`${recording.title} löschen`}>
+        <Trash2 size={18} aria-hidden="true" />
+        Löschen
+      </button>
+      <button
+        className={`recording-card compact-card archive-swipe-card ${isSelected ? "is-selected" : ""}`}
+        onClick={() => {
+          if (isDeleteOpen) {
+            setIsDeleteOpen(false);
+            return;
+          }
+          onOpen();
+        }}
+      >
+        <span className={`status-dot status-${recording.status}`} />
+        <strong>{recording.title}</strong>
+        <span>{formatDateTime(recording.createdAt)} · {formatDuration(recording.duration)}</span>
+      </button>
+    </div>
   );
 }
 
