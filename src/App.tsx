@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type RefObject, type TouchEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject, type TouchEvent } from "react";
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
@@ -17,6 +17,8 @@ import {
   Download,
   FileAudio,
   FileText,
+  Globe2,
+  List,
   Loader2,
   Menu,
   Mic,
@@ -27,7 +29,9 @@ import {
   RotateCcw,
   Search,
   Settings,
+  Share2,
   Square,
+  Target,
   Trash2,
   Upload,
   LogOut,
@@ -449,6 +453,11 @@ export function App() {
 
       {mode === "recording" && !settingsOpen ? null : (
         <header className="topbar">
+          {mode === "latest" && !settingsOpen ? (
+            <button className="topbar-nav-button" aria-label="Zurück zur Aufnahme" onClick={() => setMode("recording")}>
+              <ChevronLeft size={24} aria-hidden="true" />
+            </button>
+          ) : null}
           <div>
             <p className="eyebrow">Voice Recorder</p>
             <h1>{settingsOpen ? "Einstellungen" : mode === "latest" ? "Letzte Aufnahme" : "Archiv"}</h1>
@@ -575,10 +584,9 @@ export function App() {
             <section className="detail-panel clusters-panel latest-detail-panel">
               <div className="cluster-list">
                 {selected ? (
-                  <RecordingCluster
+                  <LatestRecordingDetail
                     recording={selected}
-                    isOpen
-                    onToggle={() => undefined}
+                    onBack={() => setMode("recording")}
                     onDelete={() => handleDelete(selected)}
                     onRename={(title) => handleRename(selected, title)}
                     onRetry={() => handleRetryTranscription(selected)}
@@ -1105,6 +1113,360 @@ async function fetchElevenLabsVoices(): Promise<ElevenLabsVoice[]> {
   );
   const result = await getElevenLabsVoices();
   return result.data.voices;
+}
+
+function LatestRecordingDetail({
+  recording,
+  onDelete,
+  onRename,
+  onRetry,
+  onGenerateSpeech,
+  onTranslate
+}: {
+  recording: Recording;
+  onBack: () => void;
+  onDelete: () => void;
+  onRename: (title: string) => Promise<void>;
+  onRetry: () => void;
+  onGenerateSpeech: (
+    kind: "summary" | "transcript" | "translation" | "transcriptTranslation",
+    targetLanguage?: string
+  ) => Promise<string>;
+  onTranslate: (targetLanguage: string, source?: "summary" | "transcript") => Promise<void>;
+}) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [draftTitle, setDraftTitle] = useState(recording.title);
+  const [openPanel, setOpenPanel] = useState<"" | "transcript" | "topic" | "summary" | "translation" | "export">("");
+  const [targetLanguage, setTargetLanguage] = useState("en");
+  const [isTranslating, setIsTranslating] = useState(false);
+
+  useEffect(() => {
+    setDraftTitle(recording.title);
+  }, [recording.title]);
+
+  async function shareRecording() {
+    const shareText = `${recording.title}\n${formatDateTime(recording.createdAt)} · ${formatDuration(recording.duration)}`;
+    if (navigator.share) {
+      await navigator.share({ title: recording.title, text: shareText, url: recording.audioUrl || window.location.href }).catch(() => undefined);
+      return;
+    }
+    await navigator.clipboard.writeText(recording.audioUrl || shareText);
+  }
+
+  async function translateSummary() {
+    setIsTranslating(true);
+    try {
+      await onTranslate(targetLanguage, "summary");
+      setOpenPanel("translation");
+    } finally {
+      setIsTranslating(false);
+    }
+  }
+
+  return (
+    <article className="latest-detail-screen">
+      <section className="latest-recording-card">
+        <div className="latest-recording-head">
+          <div>
+            <p className="latest-section-kicker">
+              <span className={`status-dot status-${recording.status}`} />
+              Aufnahme
+            </p>
+            {isRenaming ? (
+              <label className="latest-rename-field">
+                <input value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} />
+              </label>
+            ) : (
+              <h2>{getCleanRecordingTitle(recording.title)}</h2>
+            )}
+            <span>{formatDateTime(recording.createdAt)}</span>
+          </div>
+          <em>{formatDuration(recording.duration)}</em>
+        </div>
+
+        <div className="latest-audio-stage">
+          {recording.audioUrl ? <RoundAudioToggle audioRef={audioRef} audioUrl={recording.audioUrl} label="Aufzeichnung" /> : null}
+          <StaticAudioWaveform seed={recording.id} />
+          <div className="latest-audio-times">
+            <span>00:00</span>
+            <span>{formatDuration(recording.duration)}</span>
+          </div>
+          {recording.audioUrl ? <audio ref={audioRef} src={recording.audioUrl} className="hidden-audio" /> : null}
+        </div>
+
+        <p className={`audio-status ${recording.audioUrl ? "audio-status-ready" : `audio-status-${recording.status}`}`}>
+          <CheckCircle2 size={15} aria-hidden="true" />
+          {recording.audioUrl ? "Audio ist verfügbar." : statusLabel(recording.status)}
+        </p>
+
+        <div className="latest-card-actions">
+          <button
+            className="latest-action-button"
+            onClick={async () => {
+              if (isRenaming) await onRename(draftTitle);
+              setIsRenaming((current) => !current);
+            }}
+          >
+            <Pencil size={20} aria-hidden="true" />
+            {isRenaming ? "Speichern" : "Bearbeiten"}
+          </button>
+          <button className="latest-action-button is-danger" onClick={onDelete}>
+            <Trash2 size={20} aria-hidden="true" />
+            Löschen
+          </button>
+          <button className="latest-action-button" onClick={shareRecording}>
+            <Share2 size={20} aria-hidden="true" />
+            Teilen
+          </button>
+        </div>
+      </section>
+
+      <section className="latest-panel-group">
+        <p className="latest-group-label">Inhalte</p>
+        <LatestContentRow
+          icon={<FileText size={22} aria-hidden="true" />}
+          title="Transkript"
+          subtitle="Gespräch in Textform"
+          isOpen={openPanel === "transcript"}
+          onClick={() => setOpenPanel((current) => (current === "transcript" ? "" : "transcript"))}
+          audioControl={
+            recording.transcript.length ? (
+              <ElevenLabsControls
+                audioUrl={recording.elevenLabsTranscriptAudioUrl}
+                storageKey={`elevenlabs:${recording.id}:transcript`}
+                onGenerate={() => onGenerateSpeech("transcript")}
+              />
+            ) : null
+          }
+        >
+          <LatestTranscriptBlock recording={recording} onRetry={onRetry} />
+        </LatestContentRow>
+        <LatestContentRow
+          icon={<Target size={22} aria-hidden="true" />}
+          title="Hauptthema"
+          subtitle="Wesentliche Inhalte auf einen Blick"
+          isOpen={openPanel === "topic"}
+          onClick={() => setOpenPanel((current) => (current === "topic" ? "" : "topic"))}
+          audioControl={
+            recording.shortSummary || recording.summary ? (
+              <ElevenLabsControls
+                audioUrl={recording.elevenLabsSummaryAudioUrl}
+                storageKey={`elevenlabs:${recording.id}:summary`}
+                onGenerate={() => onGenerateSpeech("summary")}
+              />
+            ) : null
+          }
+        >
+          <p>{recording.shortSummary || "Das Hauptthema wird nach der Verarbeitung angezeigt."}</p>
+        </LatestContentRow>
+        <LatestContentRow
+          icon={<List size={22} aria-hidden="true" />}
+          title="Zusammenfassung"
+          subtitle="Kernaussagen kompakt zusammengefasst"
+          isOpen={openPanel === "summary"}
+          onClick={() => setOpenPanel((current) => (current === "summary" ? "" : "summary"))}
+          audioControl={
+            recording.summary ? (
+              <ElevenLabsControls
+                audioUrl={recording.elevenLabsSummaryAudioUrl}
+                storageKey={`elevenlabs:${recording.id}:summary`}
+                onGenerate={() => onGenerateSpeech("summary")}
+              />
+            ) : null
+          }
+        >
+          <p>{recording.summary || recording.shortSummary || "Noch keine Zusammenfassung vorhanden."}</p>
+        </LatestContentRow>
+        <LatestContentRow
+          icon={<Globe2 size={22} aria-hidden="true" />}
+          title="Übersetzung"
+          subtitle="In andere Sprache übersetzen"
+          isOpen={openPanel === "translation"}
+          onClick={() => setOpenPanel((current) => (current === "translation" ? "" : "translation"))}
+        >
+          <LatestTranslationBlock recording={recording} targetLanguage={targetLanguage} />
+        </LatestContentRow>
+      </section>
+
+      <section className="latest-panel-group">
+        <p className="latest-group-label">Einstellungen</p>
+        <div className="latest-setting-row">
+          <span>Sprache für Übersetzung</span>
+          <select value={targetLanguage} onChange={(event) => setTargetLanguage(event.target.value)}>
+            {europeanLanguages.map((language) => (
+              <option key={language.code} value={language.code}>
+                {language.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button className="latest-setting-row latest-switch-row" onClick={translateSummary} disabled={isTranslating}>
+          <span>{isTranslating ? "Übersetzung läuft" : "Zusammenfassung übersetzen"}</span>
+          <em className="latest-switch">{isTranslating ? <Loader2 className="spin" size={18} aria-hidden="true" /> : null}</em>
+        </button>
+      </section>
+
+      <section className="latest-panel-group">
+        <p className="latest-group-label">Export</p>
+        <LatestContentRow
+          icon={<Download size={22} aria-hidden="true" />}
+          title="Exportieren"
+          subtitle="Audio, Transkript oder Zusammenfassung exportieren"
+          isOpen={openPanel === "export"}
+          onClick={() => setOpenPanel((current) => (current === "export" ? "" : "export"))}
+        >
+          <LatestExportControls recording={recording} />
+        </LatestContentRow>
+      </section>
+    </article>
+  );
+}
+
+function LatestContentRow({
+  icon,
+  title,
+  subtitle,
+  isOpen,
+  onClick,
+  audioControl,
+  children
+}: {
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+  isOpen: boolean;
+  onClick: () => void;
+  audioControl?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className={`latest-content-item ${isOpen ? "is-open" : ""}`}>
+      <div className="latest-content-row">
+        <button className="latest-content-main" onClick={onClick} aria-expanded={isOpen}>
+          <span className="latest-content-icon">{icon}</span>
+          <span>
+            <strong>{title}</strong>
+            <small>{subtitle}</small>
+          </span>
+        </button>
+        <span className="latest-content-trailing">{audioControl || <ChevronLeft className="forward" size={21} aria-hidden="true" />}</span>
+      </div>
+      {isOpen ? <div className="latest-content-body">{children}</div> : null}
+    </div>
+  );
+}
+
+function LatestTranscriptBlock({ recording, onRetry }: { recording: Recording; onRetry: () => void }) {
+  if (recording.errorMessage) {
+    return (
+      <>
+        <p className="error-text">{recording.errorMessage}</p>
+        {recording.audioUrl ? (
+          <button className="secondary-action compact-action" onClick={onRetry}>
+            Transkript erneut starten
+          </button>
+        ) : null}
+      </>
+    );
+  }
+
+  if (!recording.transcript.length) {
+    return (
+      <p className="muted">
+        {recording.status === "transcribing" || recording.status === "analyzing"
+          ? "Das Transkript wird erstellt."
+          : "Noch kein Transkript vorhanden."}
+      </p>
+    );
+  }
+
+  return (
+    <>
+      <div className="transcript-actions">
+        <button className="secondary-action compact-action" onClick={onRetry}>
+          Sprecher neu erkennen
+        </button>
+      </div>
+      <div className="transcript-lines">
+        {recording.transcript.map((segment) => (
+          <p key={segment.id}>
+            <time>{formatDuration(segment.start)}</time>
+            <strong>{segment.speaker || "Sprecher 1"}</strong>
+            <span>{segment.text}</span>
+          </p>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function LatestTranslationBlock({ recording, targetLanguage }: { recording: Recording; targetLanguage: string }) {
+  const translation =
+    recording.translations?.[targetLanguage] ?? (targetLanguage === "en" ? recording.englishTranslation : "");
+
+  if (!translation) {
+    return <p className="muted">Noch keine Übersetzung für diese Sprache vorhanden.</p>;
+  }
+
+  return <p>{stripSpeakerLabels(translation)}</p>;
+}
+
+function LatestExportControls({ recording }: { recording: Recording }) {
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportNotice, setExportNotice] = useState("");
+
+  async function saveToDropbox() {
+    setIsExporting(true);
+    setExportNotice("");
+    try {
+      const result = await exportRecordingToDropbox(recording);
+      setExportNotice(`In Dropbox gespeichert: ${result.folderPath}`);
+    } catch (error) {
+      setExportNotice(error instanceof Error ? error.message : "Dropbox-Export fehlgeschlagen.");
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
+  return (
+    <div className="compact-control-grid">
+      <button className="secondary-action" onClick={() => window.print()}>
+        <FileText size={18} aria-hidden="true" />
+        PDF
+      </button>
+      <button className="secondary-action" onClick={() => downloadDocument(recording, "doc")}>
+        <Download size={18} aria-hidden="true" />
+        Word
+      </button>
+      <button className="secondary-action" onClick={saveToDropbox} disabled={isExporting}>
+        {isExporting ? <Loader2 className="spin" size={18} aria-hidden="true" /> : <Upload size={18} aria-hidden="true" />}
+        Dropbox
+      </button>
+      {exportNotice ? <p className="muted">{exportNotice}</p> : null}
+    </div>
+  );
+}
+
+function StaticAudioWaveform({ seed }: { seed: string }) {
+  const source = seed || "recording";
+  const bars = Array.from({ length: 54 }, (_, index) => {
+    const code = source.charCodeAt(index % source.length) || 7;
+    return 14 + ((code * (index + 5)) % 44);
+  });
+
+  return (
+    <div className="latest-waveform" aria-hidden="true">
+      {bars.map((height, index) => (
+        <span key={`${height}-${index}`} style={{ height: `${height}px` }} />
+      ))}
+    </div>
+  );
+}
+
+function getCleanRecordingTitle(title: string) {
+  const cleaned = title.replace(/\b(vom\s*)?\d{2}\.\d{2}\.\d{4}\s+\d{1,2}:\d{2}$/i, "").trim();
+  return cleaned || "Gespräch";
 }
 
 function RecordingCluster({
