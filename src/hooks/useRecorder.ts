@@ -29,13 +29,28 @@ export function useRecorder(): RecorderResult {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  const keepScreenAwakeRef = useRef(false);
   const chunksRef = useRef<BlobPart[]>([]);
   const startedAtRef = useRef<number | null>(null);
   const elapsedBeforePauseRef = useRef(0);
   const analyserFrameRef = useRef<number | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
 
+  const requestScreenWakeLock = useCallback(async () => {
+    if (!("wakeLock" in navigator) || wakeLockRef.current) return;
+
+    try {
+      wakeLockRef.current = await navigator.wakeLock.request("screen");
+      wakeLockRef.current.addEventListener("release", () => {
+        wakeLockRef.current = null;
+      });
+    } catch {
+      wakeLockRef.current = null;
+    }
+  }, []);
+
   const releaseStream = useCallback(() => {
+    keepScreenAwakeRef.current = false;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     wakeLockRef.current?.release().catch(() => undefined);
@@ -81,6 +96,7 @@ export function useRecorder(): RecorderResult {
 
   const start = useCallback(async (keepScreenAwake = true) => {
     try {
+      keepScreenAwakeRef.current = keepScreenAwake;
       setError("");
       setAudioBlob(null);
       chunksRef.current = [];
@@ -102,9 +118,7 @@ export function useRecorder(): RecorderResult {
         releaseStream();
       };
 
-      if (keepScreenAwake && "wakeLock" in navigator) {
-        wakeLockRef.current = await navigator.wakeLock.request("screen");
-      }
+      if (keepScreenAwake) await requestScreenWakeLock();
 
       recorder.start(1000);
       startedAtRef.current = Date.now();
@@ -117,7 +131,7 @@ export function useRecorder(): RecorderResult {
       setState("error");
       releaseStream();
     }
-  }, [releaseStream, startVolumeMeter]);
+  }, [releaseStream, requestScreenWakeLock, startVolumeMeter]);
 
   const pause = useCallback(() => {
     if (recorderRef.current?.state === "recording") {
@@ -164,6 +178,17 @@ export function useRecorder(): RecorderResult {
 
     return () => window.clearInterval(timer);
   }, [state]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && state === "recording" && keepScreenAwakeRef.current) {
+        void requestScreenWakeLock();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [requestScreenWakeLock, state]);
 
   useEffect(() => releaseStream, [releaseStream]);
 

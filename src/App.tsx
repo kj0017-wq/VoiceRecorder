@@ -128,9 +128,6 @@ export function App() {
   const [authLoading, setAuthLoading] = useState(firebase.isConfigured);
   const [selectedId, setSelectedId] = useState<string>("");
   const [openClusterId, setOpenClusterId] = useState<string>("");
-  const [allowScreenSleep, setAllowScreenSleep] = useState(
-    () => localStorage.getItem("voice-allow-screen-sleep") === "yes"
-  );
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Übersicht");
   const [consentAccepted, setConsentAccepted] = useState(() => localStorage.getItem("voice-consent") === "yes");
   const [mode, setMode] = useState<AppMode>("recording");
@@ -175,14 +172,10 @@ export function App() {
   }, [notice]);
 
   useEffect(() => {
-    localStorage.setItem("voice-allow-screen-sleep", allowScreenSleep ? "yes" : "no");
-  }, [allowScreenSleep]);
-
-  useEffect(() => {
     localStorage.setItem("voice-elevenlabs-settings", JSON.stringify(voiceSettings));
   }, [voiceSettings]);
 
-  const batteryRecording = allowScreenSleep && recorder.state === "recording";
+  const batteryRecording = false;
 
   useEffect(() => {
     if (batteryRecording) {
@@ -287,7 +280,7 @@ export function App() {
       ...current,
       title: current.title.trim() ? current.title : createFallbackTitle(startedAt)
     }));
-    await recorder.start(!allowScreenSleep);
+    await recorder.start(true);
   }
 
   function goToNextPage() {
@@ -412,10 +405,7 @@ export function App() {
   }
 
   function revealBatteryMode() {
-    if (batteryRecording) {
-      setAllowScreenSleep(false);
-      setBatteryDimmed(false);
-    }
+    setBatteryDimmed(false);
   }
 
   if (authLoading) {
@@ -569,16 +559,6 @@ export function App() {
               <span>0 dB</span>
             </div>
           </section>
-
-          <label className="screen-sleep-toggle recorder-sleep-toggle">
-            <input
-              type="checkbox"
-              checked={allowScreenSleep}
-              onChange={(event) => setAllowScreenSleep(event.target.checked)}
-              disabled={recorder.state === "recording" || recorder.state === "paused"}
-            />
-            Stromsparmodus während der Aufnahme
-          </label>
 
           {recorder.error ? <p className="error-text recorder-error">{recorder.error}</p> : null}
         </section>
