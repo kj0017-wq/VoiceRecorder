@@ -567,16 +567,16 @@ export function App() {
           {mode === "latest" ? (
             <section className="detail-panel clusters-panel latest-detail-panel">
               <div className="cluster-list">
-                {latestRecording ? (
+                {selected ? (
                   <RecordingCluster
-                    recording={latestRecording}
+                    recording={selected}
                     isOpen
                     onToggle={() => undefined}
-                    onDelete={() => handleDelete(latestRecording)}
-                    onRename={(title) => handleRename(latestRecording, title)}
-                    onRetry={() => handleRetryTranscription(latestRecording)}
-                    onGenerateSpeech={(kind, targetLanguage) => handleGenerateSpeech(latestRecording, kind, targetLanguage)}
-                    onTranslate={(targetLanguage, source) => handleTranslate(latestRecording, targetLanguage, source)}
+                    onDelete={() => handleDelete(selected)}
+                    onRename={(title) => handleRename(selected, title)}
+                    onRetry={() => handleRetryTranscription(selected)}
+                    onGenerateSpeech={(kind, targetLanguage) => handleGenerateSpeech(selected, kind, targetLanguage)}
+                    onTranslate={(targetLanguage, source) => handleTranslate(selected, targetLanguage, source)}
                   />
                 ) : (
                   <div className="empty-state">
@@ -588,97 +588,33 @@ export function App() {
               </div>
             </section>
           ) : (
-            <>
-          <aside className="list-panel">
-            <div className="section-title">
-              <Archive size={18} aria-hidden="true" />
-              Aufzeichnungen
-            </div>
-            <div className="recording-list">
-              {filtered.map((recording) => (
-                <button
-                  key={recording.id}
-                  className={`recording-card compact-card ${selected?.id === recording.id ? "is-selected" : ""}`}
-                  onClick={() => {
-                    setSelectedId(recording.id);
-                    setActiveTab("Audio");
-                  }}
-                >
-                  <span className={`status-dot status-${recording.status}`} />
-                  <strong>{recording.title}</strong>
-                  <span>{formatDateTime(recording.createdAt)} · {formatDuration(recording.duration)}</span>
-                </button>
-              ))}
-            </div>
-          </aside>
-
-          <section className="detail-panel clusters-panel">
-            <div className="cluster-list">
-              {filtered.map((recording) => (
-                <RecordingCluster
-                  key={recording.id}
-                  recording={recording}
-                  isOpen={openClusterId === recording.id}
-                  onToggle={() => setOpenClusterId((current) => (current === recording.id ? "" : recording.id))}
-                  onDelete={() => handleDelete(recording)}
-                  onRename={(title) => handleRename(recording, title)}
-                  onRetry={() => handleRetryTranscription(recording)}
-                  onGenerateSpeech={(kind, targetLanguage) => handleGenerateSpeech(recording, kind, targetLanguage)}
-                  onTranslate={(targetLanguage, source) => handleTranslate(recording, targetLanguage, source)}
-                />
-              ))}
-            </div>
-            {selected ? (
-              <article className="recording-cluster">
-                <div className="detail-header">
-                  <div>
-                    <p className="eyebrow">Aufnahme</p>
-                    <h2>{selected.title}</h2>
-                    <span>{formatDateTime(selected.createdAt)} · {formatDuration(selected.duration)}</span>
-                  </div>
-                  <button className="ghost-icon" aria-label="Gespräch löschen" onClick={() => handleDelete(selected)}>
-                    <Trash2 size={20} aria-hidden="true" />
-                  </button>
+            <section className="detail-panel archive-list-panel">
+              {filtered.length ? (
+                <div className="recording-list archive-only-list">
+                  {filtered.map((recording) => (
+                    <button
+                      key={recording.id}
+                      className={`recording-card compact-card ${selected?.id === recording.id ? "is-selected" : ""}`}
+                      onClick={() => {
+                        setSelectedId(recording.id);
+                        setOpenClusterId(recording.id);
+                        setMode("latest");
+                      }}
+                    >
+                      <span className={`status-dot status-${recording.status}`} />
+                      <strong>{recording.title}</strong>
+                      <span>{formatDateTime(recording.createdAt)} · {formatDuration(recording.duration)}</span>
+                    </button>
+                  ))}
                 </div>
-
-                <section className="cluster-section">
-                  <AudioTools recording={selected} audioRef={audioRef} />
-                </section>
-                <section className="cluster-section">
-                  <SimpleTranscript
-                    recording={selected}
-                    onRetry={() => handleRetryTranscription(selected)}
-                    onGenerateSpeech={() => handleGenerateSpeech(selected, "transcript")}
-                    onTranslate={(targetLanguage) => handleTranslate(selected, targetLanguage, "transcript")}
-                    onGenerateTranslationSpeech={(targetLanguage) =>
-                      handleGenerateSpeech(selected, "transcriptTranslation", targetLanguage)
-                    }
-                  />
-                </section>
-                <section className="cluster-section">
-                  <SimpleSummary recording={selected} onGenerateSpeech={() => handleGenerateSpeech(selected, "summary")} />
-                </section>
-                <section className="cluster-section">
-                  <SimpleTranslation
-                    recording={selected}
-                    onTranslate={(targetLanguage) => handleTranslate(selected, targetLanguage)}
-                    onGenerateSpeech={(targetLanguage) => handleGenerateSpeech(selected, "translation", targetLanguage)}
-                  />
-                </section>
-                <section className="cluster-section">
-                  <h3>Export</h3>
-                  <SimpleExport recording={selected} />
-                </section>
-              </article>
-            ) : (
+              ) : (
               <div className="empty-state">
                 <Mic size={40} aria-hidden="true" />
                 <h2>Noch keine Gespräche</h2>
                 <p>Starten Sie eine Aufnahme oder importieren Sie eine Audiodatei.</p>
               </div>
-            )}
-          </section>
-            </>
+              )}
+            </section>
           )}
         </section>
       ) : null}
@@ -1215,6 +1151,10 @@ function RecordingCluster({
 
       {isOpen ? (
         <div className="cluster-body">
+          <section className="cluster-section">
+            <AudioTools recording={recording} audioRef={clusterAudioRef} />
+          </section>
+
           <div className="cluster-actions">
             {isRenaming ? (
               <label className="rename-field">
@@ -1223,7 +1163,9 @@ function RecordingCluster({
               </label>
             ) : null}
             <button
-              className="secondary-action"
+              className="secondary-action cluster-icon-action"
+              aria-label={isRenaming ? "Namen speichern" : "Aufnahme umbenennen"}
+              title={isRenaming ? "Speichern" : "Umbenennen"}
               onClick={async () => {
                 if (isRenaming) {
                   await onRename(draftTitle);
@@ -1231,17 +1173,13 @@ function RecordingCluster({
                 setIsRenaming((current) => !current);
               }}
             >
-              {isRenaming ? "Speichern" : "Umbenennen"}
+              {isRenaming ? "Speichern" : <Pencil size={18} aria-hidden="true" />}
             </button>
             <button className="ghost-action" onClick={onDelete}>
               <Trash2 size={18} aria-hidden="true" />
               Löschen
             </button>
           </div>
-
-          <section className="cluster-section">
-            <AudioTools recording={recording} audioRef={clusterAudioRef} />
-          </section>
 
           <section className="cluster-section">
             <SimpleTranscript
@@ -1874,9 +1812,15 @@ function ElevenLabsControls({
         </div>
       ) : null}
       {!readyAudioUrl ? (
-        <button className="secondary-action" onClick={generate} disabled={isGenerating}>
-          {isGenerating ? <Loader2 className="spin" size={18} aria-hidden="true" /> : <Download size={18} aria-hidden="true" />}
-          Audio erstellen
+        <button
+          className="secondary-action generate-audio-toggle"
+          onClick={generate}
+          disabled={isGenerating}
+          aria-label="Audio erstellen"
+          title="Audio erstellen"
+        >
+          {isGenerating ? <Loader2 className="spin" size={18} aria-hidden="true" /> : <Play size={18} aria-hidden="true" />}
+          <span>Audio erstellen</span>
         </button>
       ) : null}
       <audio

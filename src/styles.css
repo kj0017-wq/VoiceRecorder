@@ -443,6 +443,25 @@ button {
   color: #ff3131;
 }
 
+.latest-app-shell .cluster-type-row > strong,
+.latest-app-shell .section-toggle strong {
+  display: none;
+}
+
+.latest-app-shell .section-heading-row > .section-toggle {
+  grid-template-columns: minmax(0, 1fr);
+  padding-right: 48px;
+}
+
+.latest-app-shell .section-heading-row > .round-audio-toggle,
+.latest-app-shell .section-heading-row > .elevenlabs-controls {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  margin-right: 0;
+  transform: translateY(-50%);
+}
+
 .latest-app-shell .cluster-duration,
 .latest-app-shell .cluster-section p,
 .latest-app-shell .recording-card span,
@@ -500,6 +519,12 @@ button {
   min-height: 40px;
 }
 
+.latest-app-shell .cluster-icon-action {
+  width: 46px;
+  min-width: 46px;
+  padding: 0;
+}
+
 .latest-app-shell .primary-action {
   color: #ffffff;
   background: #ff1a1a;
@@ -526,6 +551,23 @@ button {
   border-color: rgba(255, 255, 255, 0.16);
   color: #ff3131;
   background: rgba(255, 255, 255, 0.04);
+}
+
+.latest-app-shell .generate-audio-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  min-height: 38px;
+  border-radius: 50%;
+  padding: 0;
+  color: #ff3131;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.latest-app-shell .generate-audio-toggle span {
+  display: none;
 }
 
 .latest-app-shell .transcript-lines time {
@@ -1390,6 +1432,12 @@ button {
   justify-content: flex-end;
 }
 
+.cluster-icon-action {
+  width: 44px;
+  min-width: 44px;
+  padding: 0;
+}
+
 .rename-field {
   display: grid;
   flex: 1 1 220px;
@@ -1738,6 +1786,16 @@ button {
   color: #ffffff;
   border-color: #be123c;
   background: #be123c;
+}
+
+.generate-audio-toggle {
+  width: 44px;
+  min-width: 44px;
+  padding: 0;
+}
+
+.generate-audio-toggle span {
+  display: none;
 }
 
 .compact-action {
