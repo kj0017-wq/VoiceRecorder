@@ -18,8 +18,10 @@ import {
   FileAudio,
   FileText,
   Loader2,
+  Menu,
   Mic,
   Pause,
+  Pencil,
   Play,
   Plus,
   RotateCcw,
@@ -137,6 +139,8 @@ export function App() {
     project: ""
   }));
   const [isSaving, setIsSaving] = useState(false);
+  const [autoSaveAfterStop, setAutoSaveAfterStop] = useState(false);
+  const [recordingStartedAt, setRecordingStartedAt] = useState<Date>(() => new Date());
   const [notice, setNotice] = useState("");
   const [batteryDimmed, setBatteryDimmed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -240,7 +244,7 @@ export function App() {
     });
   }, []);
 
-  async function saveBlob(blob: Blob, duration = recorder.elapsedSeconds) {
+  async function saveBlob(blob: Blob, duration = recorder.elapsedSeconds, returnToList = true) {
     setIsSaving(true);
     setNotice("");
     try {
@@ -248,7 +252,7 @@ export function App() {
       const saved = await createRecordingFromAudio(blob, { ...metadata, title }, userId, duration);
       setSelectedId(saved.id);
       setNotice(saved.audioUrl ? "Aufnahme gespeichert und Verarbeitung gestartet." : "Aufnahme gespeichert.");
-      setMode("home");
+      if (returnToList) setMode("home");
       recorder.discard();
       setMetadata({ title: createFallbackTitle(), category: "", project: "" });
     } catch {
@@ -256,6 +260,28 @@ export function App() {
     } finally {
       setIsSaving(false);
     }
+  }
+
+  useEffect(() => {
+    if (!autoSaveAfterStop || recorder.state !== "stopped" || !recorder.audioBlob || isSaving) return;
+    setAutoSaveAfterStop(false);
+    void saveBlob(recorder.audioBlob, recorder.elapsedSeconds, false);
+  }, [autoSaveAfterStop, recorder.audioBlob, recorder.elapsedSeconds, recorder.state, isSaving]);
+
+  async function handleRecorderPrimaryAction() {
+    if (recorder.state === "recording" || recorder.state === "paused") {
+      setAutoSaveAfterStop(true);
+      recorder.stop();
+      return;
+    }
+
+    const startedAt = new Date();
+    setRecordingStartedAt(startedAt);
+    setMetadata((current) => ({
+      ...current,
+      title: current.title.trim() ? current.title : createFallbackTitle(startedAt)
+    }));
+    await recorder.start(!allowScreenSleep);
   }
 
   function acceptConsent() {
@@ -358,7 +384,7 @@ export function App() {
 
   return (
     <main
-      className={`app-shell ${batteryRecording ? "battery-mode" : ""} ${batteryDimmed ? "battery-dimmed" : ""}`}
+      className={`app-shell ${mode === "recording" && !settingsOpen ? "recorder-app-shell" : ""} ${batteryRecording ? "battery-mode" : ""} ${batteryDimmed ? "battery-dimmed" : ""}`}
       onClick={revealBatteryMode}
     >
       {!consentAccepted && (
@@ -374,18 +400,20 @@ export function App() {
         </section>
       )}
 
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">Voice Recorder</p>
-          <h1>{settingsOpen ? "Einstellungen" : mode === "recording" ? "Aufnahme erstellen" : "Aufzeichnungen"}</h1>
-        </div>
-        <div className="topbar-actions">
-          <button className="user-pill" onClick={handleLogout}>
-            <LogOut size={16} aria-hidden="true" />
-            Abmelden
-          </button>
-        </div>
-      </header>
+      {mode === "recording" && !settingsOpen ? null : (
+        <header className="topbar">
+          <div>
+            <p className="eyebrow">Voice Recorder</p>
+            <h1>{settingsOpen ? "Einstellungen" : "Aufzeichnungen"}</h1>
+          </div>
+          <div className="topbar-actions">
+            <button className="user-pill" onClick={handleLogout}>
+              <LogOut size={16} aria-hidden="true" />
+              Abmelden
+            </button>
+          </div>
+        </header>
+      )}
 
       {settingsOpen && accessState?.isAdmin ? (
         <SettingsPanel
@@ -397,81 +425,99 @@ export function App() {
       ) : null}
 
       {!settingsOpen && mode === "recording" ? (
-        <section className="recording-view">
-          <button className="ghost-action back-button" onClick={() => setMode("home")}>
-            <Archive size={18} aria-hidden="true" />
-            Aufzeichnungen
-          </button>
+        <section className="recording-view recorder-home">
+          <div className="recorder-top-actions">
+            <button className="recorder-icon-button" aria-label="Aufnahmen öffnen" onClick={() => setMode("home")}>
+              <Menu size={22} aria-hidden="true" />
+            </button>
+            {accessState?.isAdmin ? (
+              <button className="recorder-icon-button" aria-label="Einstellungen öffnen" onClick={() => setSettingsOpen(true)}>
+                <Settings size={21} aria-hidden="true" />
+              </button>
+            ) : null}
+          </div>
 
-          <div className="recorder-surface">
-            <div className="recording-meter" aria-label={`Lautstärke ${recorder.volume} Prozent`}>
-              <span style={{ height: `${Math.max(8, recorder.volume)}%` }} />
-            </div>
-            <p className="timer">{formatDuration(recorder.elapsedSeconds)}</p>
-            <p className={`recorder-state recorder-state-${recorder.state}`}>
-              {allowScreenSleep && recorder.state === "recording" ? <span className="recording-cursor" /> : null}
-              {getRecorderStatusText(recorder.state, isSaving)}
-            </p>
+          <div className="recorder-brand">
+            <AudioMark />
+            <p>Voice Recorder</p>
+          </div>
 
-            <label className="screen-sleep-toggle">
-              <input
-                type="checkbox"
-                checked={allowScreenSleep}
-                onChange={(event) => setAllowScreenSleep(event.target.checked)}
-                disabled={recorder.state === "recording" || recorder.state === "paused"}
-              />
-              Display darf waehrend der Aufnahme ausgehen
-            </label>
+          <button
+            className={`record-button ${recorder.state === "recording" ? "is-recording" : ""}`}
+            type="button"
+            aria-label={recorder.state === "recording" ? "Aufnahme stoppen" : "Aufnahme starten"}
+            onClick={handleRecorderPrimaryAction}
+            disabled={isSaving}
+          />
 
-            <div className="metadata-grid">
-              <label>
-                Name der Aufnahme
+          <div className="recording-status-copy">
+            <strong className={recorder.state === "recording" ? "is-live" : ""}>
+              {isSaving ? "Aufnahme wird gespeichert" : recorder.state === "recording" ? "Aufnahme läuft" : "Bereit zur Aufnahme"}
+            </strong>
+            <span>
+              {recorder.state === "recording"
+                ? "Tippe erneut auf den Button, um zu stoppen"
+                : "Tippe auf den Button, um die Aufnahme zu starten"}
+            </span>
+          </div>
+
+          <div className="recording-meta-strip">
+            <label className="recording-name-field">
+              <span>Aufnahme-Name</span>
+              <span className="recording-name-input-wrap">
                 <input
                   value={metadata.title}
                   onChange={(event) => setMetadata((current) => ({ ...current, title: event.target.value }))}
+                  placeholder="Neues Gespräch"
                 />
-              </label>
-            </div>
-
-            {recorder.error && <p className="error-text">{recorder.error}</p>}
-
-            <div className="recorder-actions">
-              {recorder.state === "idle" || recorder.state === "error" ? (
-                <button className="primary-action" onClick={() => recorder.start(!allowScreenSleep)}>
-                  <Mic size={20} aria-hidden="true" />
-                  Start
-                </button>
-              ) : null}
-              {recorder.state === "recording" ? (
-                <button className="secondary-action" onClick={recorder.pause}>
-                  <Pause size={20} aria-hidden="true" />
-                  Pause
-                </button>
-              ) : null}
-              {recorder.state === "paused" ? (
-                <button className="secondary-action" onClick={recorder.resume}>
-                  <Play size={20} aria-hidden="true" />
-                  Fortsetzen
-                </button>
-              ) : null}
-              {recorder.state === "recording" || recorder.state === "paused" ? (
-                <button className="danger-action" onClick={recorder.stop}>
-                  <Square size={20} aria-hidden="true" />
-                  Beenden
-                </button>
-              ) : null}
-              {recorder.audioBlob ? (
-                <button className="primary-action" onClick={() => saveBlob(recorder.audioBlob!)} disabled={isSaving}>
-                  {isSaving ? <Loader2 className="spin" size={20} aria-hidden="true" /> : <Upload size={20} aria-hidden="true" />}
-                  {isSaving ? "Upload läuft" : "Hochladen"}
-                </button>
-              ) : null}
-              <button className="ghost-action" onClick={recorder.discard}>
-                <Trash2 size={18} aria-hidden="true" />
-                Verwerfen
-              </button>
+                <Pencil size={15} aria-hidden="true" />
+              </span>
+            </label>
+            <div className="recording-date-field">
+              <span>Datum & Uhrzeit</span>
+              <strong>{formatRecorderDate(recordingStartedAt)}</strong>
             </div>
           </div>
+
+          <div className="duration-panel">
+            <span>Laufzeit</span>
+            <strong>{formatDigitalDuration(recorder.elapsedSeconds)}</strong>
+          </div>
+
+          <section className="live-panel" aria-label="Amplitude live">
+            <div className="live-panel-heading">
+              <span>Amplitude (Live)</span>
+            </div>
+            <LiveWaveform values={recorder.waveform} />
+          </section>
+
+          <section className="live-panel" aria-label="Lautstärke live">
+            <div className="live-panel-heading">
+              <span>Lautstärke (Live)</span>
+              <strong>{recorder.decibels} dB</strong>
+            </div>
+            <div className="level-meter" aria-hidden="true">
+              <span style={{ width: `${recorder.volume}%` }} />
+            </div>
+            <div className="level-scale">
+              <span>-60 dB</span>
+              <span>-30 dB</span>
+              <span>-12 dB</span>
+              <span>0 dB</span>
+            </div>
+          </section>
+
+          <label className="screen-sleep-toggle recorder-sleep-toggle">
+            <input
+              type="checkbox"
+              checked={allowScreenSleep}
+              onChange={(event) => setAllowScreenSleep(event.target.checked)}
+              disabled={recorder.state === "recording" || recorder.state === "paused"}
+            />
+            Stromsparmodus während der Aufnahme
+          </label>
+
+          {recorder.error ? <p className="error-text recorder-error">{recorder.error}</p> : null}
         </section>
       ) : !settingsOpen ? (
         <section className="workspace recordings-workspace">
@@ -1174,6 +1220,52 @@ function getRecorderStatusText(state: string, isSaving: boolean): string {
   if (state === "stopped") return "Bereit zum Hochladen";
   if (state === "error") return "Aufnahme nicht möglich";
   return "Bereit für die Aufnahme";
+}
+
+function formatDigitalDuration(seconds: number): string {
+  const safeSeconds = Math.max(0, Math.round(seconds));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const rest = safeSeconds % 60;
+  return [hours, minutes, rest].map((part) => String(part).padStart(2, "0")).join(":");
+}
+
+function formatRecorderDate(value: Date): string {
+  return new Intl.DateTimeFormat("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  })
+    .format(value)
+    .replace(",", " ·");
+}
+
+function AudioMark() {
+  return (
+    <div className="audio-mark" aria-hidden="true">
+      <span />
+      <span />
+      <span />
+      <span />
+      <span />
+    </div>
+  );
+}
+
+function LiveWaveform({ values }: { values: number[] }) {
+  const points = values.length ? values : Array(48).fill(0);
+
+  return (
+    <div className="live-waveform" aria-hidden="true">
+      <div className="waveform-zero-line" />
+      {points.map((value, index) => {
+        const height = Math.max(3, Math.round(Math.abs(value) * 52));
+        return <span key={`${index}-${height}`} style={{ height: `${height}px` }} />;
+      })}
+    </div>
+  );
 }
 
 function Overview({ recording }: { recording: Recording }) {

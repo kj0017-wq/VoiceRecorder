@@ -6,6 +6,8 @@ export interface RecorderResult {
   state: RecorderState;
   elapsedSeconds: number;
   volume: number;
+  decibels: number;
+  waveform: number[];
   audioBlob: Blob | null;
   error: string;
   start: (keepScreenAwake?: boolean) => Promise<void>;
@@ -19,6 +21,8 @@ export function useRecorder(): RecorderResult {
   const [state, setState] = useState<RecorderState>("idle");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [volume, setVolume] = useState(0);
+  const [decibels, setDecibels] = useState(-60);
+  const [waveform, setWaveform] = useState<number[]>(Array(48).fill(0));
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [error, setError] = useState("");
 
@@ -29,6 +33,7 @@ export function useRecorder(): RecorderResult {
   const startedAtRef = useRef<number | null>(null);
   const elapsedBeforePauseRef = useRef(0);
   const analyserFrameRef = useRef<number | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   const releaseStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -36,19 +41,38 @@ export function useRecorder(): RecorderResult {
     wakeLockRef.current?.release().catch(() => undefined);
     wakeLockRef.current = null;
     if (analyserFrameRef.current) cancelAnimationFrame(analyserFrameRef.current);
+    analyserFrameRef.current = null;
+    audioContextRef.current?.close().catch(() => undefined);
+    audioContextRef.current = null;
   }, []);
 
   const startVolumeMeter = useCallback((stream: MediaStream) => {
     const audioContext = new AudioContext();
+    audioContextRef.current = audioContext;
     const source = audioContext.createMediaStreamSource(stream);
     const analyser = audioContext.createAnalyser();
-    const data = new Uint8Array(analyser.frequencyBinCount);
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.82;
+    const data = new Uint8Array(analyser.fftSize);
     source.connect(analyser);
 
     const tick = () => {
-      analyser.getByteFrequencyData(data);
-      const average = data.reduce((sum, value) => sum + value, 0) / data.length;
-      setVolume(Math.min(100, Math.round((average / 128) * 100)));
+      analyser.getByteTimeDomainData(data);
+      let sumSquares = 0;
+      const samples: number[] = [];
+      const sampleStep = Math.max(1, Math.floor(data.length / 48));
+
+      for (let index = 0; index < data.length; index += 1) {
+        const normalized = (data[index] - 128) / 128;
+        sumSquares += normalized * normalized;
+        if (index % sampleStep === 0 && samples.length < 48) samples.push(normalized);
+      }
+
+      const rms = Math.sqrt(sumSquares / data.length);
+      const nextDecibels = Math.max(-60, Math.min(0, 20 * Math.log10(rms || 0.0001)));
+      setDecibels(Math.round(nextDecibels));
+      setVolume(Math.max(0, Math.min(100, Math.round(((nextDecibels + 60) / 60) * 100))));
+      setWaveform(samples);
       analyserFrameRef.current = requestAnimationFrame(tick);
     };
 
@@ -60,6 +84,9 @@ export function useRecorder(): RecorderResult {
       setError("");
       setAudioBlob(null);
       chunksRef.current = [];
+      setWaveform(Array(48).fill(0));
+      setDecibels(-60);
+      setVolume(0);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       const mimeType = getSupportedMimeType();
@@ -120,6 +147,8 @@ export function useRecorder(): RecorderResult {
     setAudioBlob(null);
     setElapsedSeconds(0);
     setVolume(0);
+    setDecibels(-60);
+    setWaveform(Array(48).fill(0));
     setState("idle");
     releaseStream();
   }, [releaseStream]);
@@ -138,7 +167,7 @@ export function useRecorder(): RecorderResult {
 
   useEffect(() => releaseStream, [releaseStream]);
 
-  return { state, elapsedSeconds, volume, audioBlob, error, start, pause, resume, stop, discard };
+  return { state, elapsedSeconds, volume, decibels, waveform, audioBlob, error, start, pause, resume, stop, discard };
 }
 
 function getSupportedMimeType(): string {
