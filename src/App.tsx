@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject, type TouchEvent } from "react";
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
@@ -119,6 +119,7 @@ const europeanLanguages = [
   { code: "tr", label: "Tuerkisch" }
 ];
 const tabs = ["Übersicht", "Aufgaben", "Beschlüsse", "Transkript", "Audio"] as const;
+type AppMode = "recording" | "latest" | "archive";
 
 export function App() {
   const recorder = useRecorder();
@@ -132,7 +133,7 @@ export function App() {
   );
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Übersicht");
   const [consentAccepted, setConsentAccepted] = useState(() => localStorage.getItem("voice-consent") === "yes");
-  const [mode, setMode] = useState<"home" | "recording">("recording");
+  const [mode, setMode] = useState<AppMode>("recording");
   const [metadata, setMetadata] = useState<DraftMetadata>(() => ({
     title: createFallbackTitle(),
     category: "",
@@ -153,13 +154,18 @@ export function App() {
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const userId = user?.uid ?? demoUserId;
 
   const { recordings, filtered, error, search, setSearch, statusFilter, setStatusFilter, sort, setSort } =
     useRecordings(userId);
+  const latestRecording = useMemo(
+    () => [...recordings].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())[0],
+    [recordings]
+  );
   const selected = useMemo(
-    () => recordings.find((recording) => recording.id === selectedId) ?? filtered[0],
-    [filtered, recordings, selectedId]
+    () => recordings.find((recording) => recording.id === selectedId) ?? latestRecording ?? filtered[0],
+    [filtered, latestRecording, recordings, selectedId]
   );
 
   useEffect(() => {
@@ -252,7 +258,7 @@ export function App() {
       const saved = await createRecordingFromAudio(blob, { ...metadata, title }, userId, duration);
       setSelectedId(saved.id);
       setNotice(saved.audioUrl ? "Aufnahme gespeichert und Verarbeitung gestartet." : "Aufnahme gespeichert.");
-      if (returnToList) setMode("home");
+      if (returnToList) setMode("latest");
       recorder.discard();
       setMetadata({ title: createFallbackTitle(), category: "", project: "" });
     } catch {
@@ -282,6 +288,51 @@ export function App() {
       title: current.title.trim() ? current.title : createFallbackTitle(startedAt)
     }));
     await recorder.start(!allowScreenSleep);
+  }
+
+  function goToNextPage() {
+    if (settingsOpen) return;
+    if (mode === "recording") {
+      setMode("latest");
+      if (latestRecording) {
+        setSelectedId(latestRecording.id);
+        setOpenClusterId(latestRecording.id);
+      }
+      return;
+    }
+    if (mode === "latest") setMode("archive");
+  }
+
+  function goToPreviousPage() {
+    if (settingsOpen) return;
+    if (mode === "archive") {
+      setMode("latest");
+      if (latestRecording) {
+        setSelectedId(latestRecording.id);
+        setOpenClusterId(latestRecording.id);
+      }
+      return;
+    }
+    if (mode === "latest") setMode("recording");
+  }
+
+  function handleTouchStart(event: TouchEvent<HTMLElement>) {
+    const touch = event.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  }
+
+  function handleTouchEnd(event: TouchEvent<HTMLElement>) {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start) return;
+
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    if (Math.abs(deltaX) < 70 || Math.abs(deltaX) < Math.abs(deltaY) * 1.4) return;
+
+    if (deltaX < 0) goToNextPage();
+    else goToPreviousPage();
   }
 
   function acceptConsent() {
@@ -386,6 +437,8 @@ export function App() {
     <main
       className={`app-shell ${mode === "recording" && !settingsOpen ? "recorder-app-shell" : ""} ${batteryRecording ? "battery-mode" : ""} ${batteryDimmed ? "battery-dimmed" : ""}`}
       onClick={revealBatteryMode}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
     >
       {!consentAccepted && (
         <section className="consent" role="dialog" aria-modal="true">
@@ -404,7 +457,7 @@ export function App() {
         <header className="topbar">
           <div>
             <p className="eyebrow">Voice Recorder</p>
-            <h1>{settingsOpen ? "Einstellungen" : "Aufzeichnungen"}</h1>
+            <h1>{settingsOpen ? "Einstellungen" : mode === "latest" ? "Letzte Aufnahme" : "Archiv"}</h1>
           </div>
           <div className="topbar-actions">
             <button className="user-pill" onClick={handleLogout}>
@@ -427,7 +480,17 @@ export function App() {
       {!settingsOpen && mode === "recording" ? (
         <section className="recording-view recorder-home">
           <div className="recorder-top-actions">
-            <button className="recorder-icon-button" aria-label="Aufnahmen öffnen" onClick={() => setMode("home")}>
+            <button
+              className="recorder-icon-button"
+              aria-label="Letzte Aufnahme öffnen"
+              onClick={() => {
+                setMode("latest");
+                if (latestRecording) {
+                  setSelectedId(latestRecording.id);
+                  setOpenClusterId(latestRecording.id);
+                }
+              }}
+            >
               <Menu size={22} aria-hidden="true" />
             </button>
             {accessState?.isAdmin ? (
@@ -520,7 +583,32 @@ export function App() {
           {recorder.error ? <p className="error-text recorder-error">{recorder.error}</p> : null}
         </section>
       ) : !settingsOpen ? (
-        <section className="workspace recordings-workspace">
+        <section className={`workspace recordings-workspace ${mode === "latest" ? "latest-workspace" : "archive-workspace"}`}>
+          {mode === "latest" ? (
+            <section className="detail-panel clusters-panel">
+              <div className="cluster-list">
+                {latestRecording ? (
+                  <RecordingCluster
+                    recording={latestRecording}
+                    isOpen
+                    onToggle={() => undefined}
+                    onDelete={() => handleDelete(latestRecording)}
+                    onRename={(title) => handleRename(latestRecording, title)}
+                    onRetry={() => handleRetryTranscription(latestRecording)}
+                    onGenerateSpeech={(kind, targetLanguage) => handleGenerateSpeech(latestRecording, kind, targetLanguage)}
+                    onTranslate={(targetLanguage, source) => handleTranslate(latestRecording, targetLanguage, source)}
+                  />
+                ) : (
+                  <div className="empty-state">
+                    <Mic size={40} aria-hidden="true" />
+                    <h2>Noch keine Aufnahme</h2>
+                    <p>Wische zurück oder starte eine neue Aufnahme.</p>
+                  </div>
+                )}
+              </div>
+            </section>
+          ) : (
+            <>
           <aside className="list-panel">
             <div className="section-title">
               <Archive size={18} aria-hidden="true" />
@@ -610,6 +698,8 @@ export function App() {
               </div>
             )}
           </section>
+            </>
+          )}
         </section>
       ) : null}
 
@@ -625,14 +715,28 @@ export function App() {
           Aufnahme
         </button>
         <button
-          className={mode === "home" && !settingsOpen ? "is-active" : ""}
+          className={mode === "latest" && !settingsOpen ? "is-active" : ""}
           onClick={() => {
             setSettingsOpen(false);
-            setMode("home");
+            setMode("latest");
+            if (latestRecording) {
+              setSelectedId(latestRecording.id);
+              setOpenClusterId(latestRecording.id);
+            }
+          }}
+        >
+          <FileAudio size={20} aria-hidden="true" />
+          Letzte
+        </button>
+        <button
+          className={mode === "archive" && !settingsOpen ? "is-active" : ""}
+          onClick={() => {
+            setSettingsOpen(false);
+            setMode("archive");
           }}
         >
           <Archive size={20} aria-hidden="true" />
-          Aufzeichnungen
+          Archiv
         </button>
         {accessState?.isAdmin ? (
           <button className={settingsOpen ? "is-active" : ""} onClick={() => setSettingsOpen((current) => !current)}>
