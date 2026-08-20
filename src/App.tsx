@@ -137,6 +137,7 @@ export function App() {
     project: ""
   }));
   const [isSaving, setIsSaving] = useState(false);
+  const [savingProgress, setSavingProgress] = useState<number | null>(null);
   const [autoSaveAfterStop, setAutoSaveAfterStop] = useState(false);
   const [recordingStartedAt, setRecordingStartedAt] = useState<Date>(() => new Date());
   const [notice, setNotice] = useState("");
@@ -245,11 +246,13 @@ export function App() {
 
   async function saveBlob(blob: Blob, duration = recorder.elapsedSeconds, returnToList = true) {
     setIsSaving(true);
+    setSavingProgress(2);
     setNotice("");
     try {
       const title = metadata.title.trim() || createFallbackTitle();
-      const saved = await createRecordingFromAudio(blob, { ...metadata, title }, userId, duration);
+      const saved = await createRecordingFromAudio(blob, { ...metadata, title }, userId, duration, setSavingProgress);
       setSelectedId(saved.id);
+      setSavingProgress(100);
       setNotice(saved.audioUrl ? "Aufnahme gespeichert und Verarbeitung gestartet." : "Aufnahme gespeichert.");
       if (returnToList) setMode("latest");
       recorder.discard();
@@ -258,6 +261,7 @@ export function App() {
       setNotice("Speichern fehlgeschlagen. Die Aufnahme bleibt lokal verfügbar, bitte erneut versuchen.");
     } finally {
       setIsSaving(false);
+      window.setTimeout(() => setSavingProgress(null), 350);
     }
   }
 
@@ -508,10 +512,13 @@ export function App() {
               {isSaving ? "Aufnahme wird gespeichert" : recorder.state === "recording" ? "Aufnahme läuft" : "Bereit zur Aufnahme"}
             </strong>
             <span>
-              {recorder.state === "recording"
+              {isSaving
+                ? "Bitte kurz warten, Upload und Verarbeitung werden vorbereitet"
+                : recorder.state === "recording"
                 ? "Tippe erneut auf den Button, um zu stoppen"
                 : "Tippe auf den Button, um die Aufnahme zu starten"}
             </span>
+            {isSaving ? <SavingProgress value={savingProgress} /> : null}
           </div>
 
           <div className="recording-meta-strip">
@@ -1293,6 +1300,19 @@ function LiveWaveform({ values }: { values: number[] }) {
         const height = Math.max(3, Math.round(Math.abs(value) * 128));
         return <span key={`${index}-${height}`} style={{ height: `${height}px` }} />;
       })}
+    </div>
+  );
+}
+
+function SavingProgress({ value }: { value: number | null }) {
+  const progress = Math.max(0, Math.min(100, Math.round(value ?? 0)));
+
+  return (
+    <div className="saving-progress" role="status" aria-live="polite">
+      <div className="saving-progress-bar" aria-hidden="true">
+        <span style={value === null ? undefined : { width: `${progress}%` }} />
+      </div>
+      <em>{value === null ? "Speichern läuft" : `${progress}%`}</em>
     </div>
   );
 }

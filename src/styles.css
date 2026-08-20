@@ -768,6 +768,53 @@ button {
   font-weight: 650;
 }
 
+.saving-progress {
+  display: grid;
+  gap: 6px;
+  width: min(100%, 280px);
+  margin-top: 4px;
+}
+
+.saving-progress-bar {
+  position: relative;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.saving-progress-bar span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 28%;
+  min-width: 28%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ff1a1a, #ff6b6b);
+  box-shadow: 0 0 18px rgba(255, 26, 26, 0.5);
+  animation: saving-progress-pulse 1.05s ease-in-out infinite;
+}
+
+.saving-progress em {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.74rem;
+  font-style: normal;
+  font-weight: 850;
+}
+
+@keyframes saving-progress-pulse {
+  0% {
+    transform: translateX(-18%);
+  }
+
+  50% {
+    transform: translateX(14%);
+  }
+
+  100% {
+    transform: translateX(-18%);
+  }
+}
+
 .recording-meta-strip {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(132px, 0.85fr);

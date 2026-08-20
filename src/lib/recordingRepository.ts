@@ -51,7 +51,8 @@ export async function createRecordingFromAudio(
   file: Blob,
   metadata: DraftMetadata,
   userId: string,
-  duration: number
+  duration: number,
+  onProgress?: (progress: number) => void
 ): Promise<Recording> {
   const now = new Date();
   const baseRecording: Omit<Recording, "id"> = {
@@ -77,6 +78,7 @@ export async function createRecordingFromAudio(
   };
 
   if (isLocalMode(userId)) {
+    onProgress?.(100);
     return createLocalRecording(file, {
       ...baseRecording,
       shortSummary: "Aufnahme gespeichert."
@@ -89,7 +91,18 @@ export async function createRecordingFromAudio(
     const uploadTask = uploadBytesResumable(audioRef, file, { contentType: file.type || "audio/webm" });
 
     await new Promise<void>((resolve, reject) => {
-      uploadTask.on("state_changed", undefined, reject, () => resolve());
+      uploadTask.on(
+        "state_changed",
+        (snapshot) => {
+          const progress = snapshot.totalBytes ? Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100) : 0;
+          onProgress?.(progress);
+        },
+        reject,
+        () => {
+          onProgress?.(100);
+          resolve();
+        }
+      );
     });
 
     const audioUrl = await getDownloadURL(audioRef);
