@@ -1381,11 +1381,6 @@ function LatestTranscriptBlock({ recording, onCreate }: { recording: Recording; 
             ? "Das Transkript wird erstellt."
             : "Noch kein Transkript vorhanden."}
         </p>
-        {recording.status !== "transcribing" && recording.status !== "analyzing" && recording.audioUrl ? (
-          <button className="secondary-action compact-action" onClick={onCreate}>
-            Transkript erstellen
-          </button>
-        ) : null}
       </div>
     );
   }
@@ -2049,11 +2044,6 @@ function SimpleTranscript({
                 ? "Das Transkript wird erstellt."
                 : "Noch kein Transkript vorhanden."}
             </p>
-            {recording.status !== "transcribing" && recording.status !== "analyzing" && recording.audioUrl ? (
-              <button className="secondary-action compact-action" onClick={onCreate}>
-                Transkript erstellen
-              </button>
-            ) : null}
           </div>
         ) : null}
       </section>
