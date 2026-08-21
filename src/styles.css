@@ -225,6 +225,11 @@ button {
   color: #ff3131;
 }
 
+.equalizer-nav-icon,
+.equalizer-hero-icon {
+  transform: rotate(45deg);
+}
+
 .equalizer-hero h2 {
   margin: 0;
   color: #ffffff;

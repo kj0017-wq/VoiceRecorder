@@ -702,7 +702,7 @@ export function App() {
             setMode("equalizer");
           }}
         >
-          <SlidersHorizontal size={20} aria-hidden="true" />
+          <SlidersHorizontal className="equalizer-nav-icon" size={20} aria-hidden="true" />
           Equalizer
         </button>
         {accessState?.isAdmin ? (
@@ -1122,7 +1122,7 @@ function EqualizerScreen({
   return (
     <section className="equalizer-screen">
       <section className="equalizer-hero">
-        <SlidersHorizontal size={28} aria-hidden="true" />
+        <SlidersHorizontal className="equalizer-hero-icon" size={28} aria-hidden="true" />
         <div>
           <p className="eyebrow">Audio</p>
           <h2>Equalizer</h2>
@@ -1166,7 +1166,7 @@ function EqualizerScreen({
           onChange={(value) => update("equalizerMid", value)}
         />
         <SettingSlider
-          label="Hoehen"
+          label="Obenfrequenz"
           value={settings.equalizerHigh}
           min={-12}
           max={12}
