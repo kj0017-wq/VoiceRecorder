@@ -1942,13 +1942,19 @@ function LiveWaveform({ values }: { values: number[] }) {
 
 function SavingProgress({ value }: { value: number | null }) {
   const progress = Math.max(0, Math.min(100, Math.round(value ?? 0)));
+  const isIndeterminate = value === null;
+  const isComplete = !isIndeterminate && progress >= 100;
 
   return (
-    <div className="saving-progress" role="status" aria-live="polite">
+    <div
+      className={`saving-progress ${isIndeterminate ? "is-indeterminate" : ""} ${isComplete ? "is-complete" : ""}`}
+      role="status"
+      aria-live="polite"
+    >
       <div className="saving-progress-bar" aria-hidden="true">
-        <span style={value === null ? undefined : { width: `${progress}%` }} />
+        <span style={isIndeterminate ? undefined : { width: `${progress}%` }} />
       </div>
-      <em>{value === null ? "Speichern läuft" : `${progress}%`}</em>
+      <em>{isIndeterminate ? "Speichern läuft" : isComplete ? "Gespeichert" : `${progress}%`}</em>
     </div>
   );
 }
