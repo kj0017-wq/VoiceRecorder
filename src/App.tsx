@@ -132,7 +132,6 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string>("");
   const [openClusterId, setOpenClusterId] = useState<string>("");
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Übersicht");
-  const [consentAccepted, setConsentAccepted] = useState(() => localStorage.getItem("voice-consent") === "yes");
   const [mode, setMode] = useState<AppMode>("recording");
   const [metadata, setMetadata] = useState<DraftMetadata>(() => ({
     title: createFallbackTitle(),
@@ -191,11 +190,10 @@ export function App() {
   }, [monitorOutput]);
 
   useEffect(() => {
-    if (!consentAccepted) return;
     if (mode !== "recording" || settingsOpen || isSaving) return;
     if (recorder.state === "recording" || recorder.state === "paused") return;
     void recorder.prepare(monitorOutput);
-  }, [consentAccepted, isSaving, mode, monitorOutput, recorder.prepare, recorder.state, settingsOpen]);
+  }, [isSaving, mode, monitorOutput, recorder.prepare, recorder.state, settingsOpen]);
 
   const batteryRecording = false;
 
@@ -350,11 +348,6 @@ export function App() {
     else goToPreviousPage();
   }
 
-  function acceptConsent() {
-    localStorage.setItem("voice-consent", "yes");
-    setConsentAccepted(true);
-  }
-
   async function handleImport(fileList: FileList | null) {
     const file = fileList?.[0];
     if (!file) return;
@@ -447,24 +440,11 @@ export function App() {
 
   return (
     <main
-      className={`app-shell ${mode === "recording" && !settingsOpen ? "recorder-app-shell" : ""} ${mode === "latest" && !settingsOpen ? "latest-app-shell" : ""} ${batteryRecording ? "battery-mode" : ""} ${batteryDimmed ? "battery-dimmed" : ""}`}
+      className={`app-shell ${mode === "recording" && !settingsOpen ? "recorder-app-shell" : ""} ${mode !== "recording" && !settingsOpen ? "latest-app-shell" : ""} ${batteryRecording ? "battery-mode" : ""} ${batteryDimmed ? "battery-dimmed" : ""}`}
       onClick={revealBatteryMode}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      {!consentAccepted && (
-        <section className="consent" role="dialog" aria-modal="true">
-          <div className="consent-panel">
-            <Mic size={30} aria-hidden="true" />
-            <h1>Einwilligung zur Aufnahme</h1>
-            <p>Bitte stellen Sie sicher, dass alle Gesprächsteilnehmer der Aufzeichnung zugestimmt haben.</p>
-            <button className="primary-action" onClick={acceptConsent}>
-              Verstanden
-            </button>
-          </div>
-        </section>
-      )}
-
       {mode === "recording" && !settingsOpen ? null : (
         <header className="topbar">
           {mode === "latest" && !settingsOpen ? (

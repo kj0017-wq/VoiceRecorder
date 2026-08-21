@@ -260,8 +260,7 @@ button {
 }
 
 .topbar h1,
-.detail-header h2,
-.consent-panel h1 {
+.detail-header h2 {
   margin: 0;
   color: #101827;
   letter-spacing: 0;
@@ -403,6 +402,40 @@ button {
   padding: 0;
   background: transparent;
   box-shadow: none;
+}
+
+.latest-app-shell .archive-list-panel {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.latest-app-shell .archive-only-list {
+  gap: 10px;
+}
+
+.latest-app-shell .archive-only-list .recording-card {
+  min-height: 82px;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.025)),
+    #111318;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.32);
+}
+
+.latest-app-shell .archive-only-list .recording-card.is-selected {
+  border-color: rgba(255, 49, 49, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(255, 49, 49, 0.72), 0 16px 40px rgba(255, 26, 26, 0.12);
+}
+
+.latest-app-shell .archive-only-list .recording-card strong {
+  color: #ffffff;
+}
+
+.latest-app-shell .archive-only-list .archive-delete-action {
+  background: #dc171d;
 }
 
 .latest-app-shell .cluster-list {
@@ -1518,8 +1551,7 @@ button {
 
 .list-panel,
 .detail-panel,
-.recorder-surface,
-.consent-panel {
+.recorder-surface {
   border: 1px solid rgba(148, 163, 184, 0.35);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.88);
@@ -2573,29 +2605,6 @@ button {
   background: #ffffff;
   font-size: 0.82rem;
   font-weight: 800;
-}
-
-.consent {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
-  display: grid;
-  place-items: center;
-  padding: 18px;
-  background: rgba(15, 23, 42, 0.45);
-}
-
-.consent-panel {
-  display: grid;
-  justify-items: start;
-  gap: 12px;
-  max-width: 460px;
-  padding: 24px;
-}
-
-.consent-panel p {
-  margin: 0;
-  line-height: 1.55;
 }
 
 .empty-state {
