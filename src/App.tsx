@@ -1244,6 +1244,7 @@ function LatestRecordingDetail({
                   ? undefined
                   : async () => {
                       await onRetry("transcript");
+                      setOpenPanel("transcript");
                       return "Transkript wird erstellt. Danach kann es vorgelesen werden.";
                     }
               }
@@ -1268,6 +1269,7 @@ function LatestRecordingDetail({
                   ? undefined
                   : async () => {
                       await onRetry("summary");
+                      setOpenPanel("summary");
                       return "Zusammenfassung wird erstellt. Danach kann sie vorgelesen werden.";
                     }
               }
@@ -2034,6 +2036,7 @@ function SimpleTranscript({
               storageKey={`elevenlabs:${recording.id}:transcript`}
               onPrepare={async () => {
                 await onCreate();
+                setIsOpen(true);
                 return "Transkript wird erstellt. Danach kann es vorgelesen werden.";
               }}
               onGenerate={onGenerateSpeech}
@@ -2121,6 +2124,7 @@ function SimpleSummary({
                   ? undefined
                   : async () => {
                       await onCreate();
+                      setIsOpen(true);
                       return "Zusammenfassung wird erstellt. Danach kann sie vorgelesen werden.";
                     }
               }
@@ -2386,7 +2390,14 @@ function ElevenLabsControls({
         throw new Error("Keine ElevenLabs-Audiodatei erhalten.");
       }
       setLocalAudioUrl(generatedUrl);
-      setPlaybackHint("Audio ist fertig. Jetzt Vorlesen antippen.");
+      const player = elevenAudioRef.current;
+      if (player) {
+        player.src = generatedUrl;
+        await player.play();
+        setPlaybackHint("");
+      } else {
+        setPlaybackHint("Audio ist fertig.");
+      }
     } catch (error) {
       setPlaybackHint(error instanceof Error ? error.message : "Audio konnte nicht erstellt werden.");
     } finally {
