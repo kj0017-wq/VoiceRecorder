@@ -115,6 +115,7 @@ export const getElevenLabsVoices = onCall({ secrets: [elevenLabsApiKey] }, async
 export const processRecording = onCall({ secrets: [openaiApiKey] }, async (request) => {
   const uid = request.auth?.uid;
   const recordingId = request.data?.recordingId;
+  const mode = request.data?.mode === "transcript" ? "transcript" : "summary";
 
   if (!uid) {
     throw new HttpsError("unauthenticated", "Login erforderlich.");
@@ -136,18 +137,34 @@ export const processRecording = onCall({ secrets: [openaiApiKey] }, async (reque
     throw new HttpsError("failed-precondition", "Audio-Link fehlt.");
   }
 
-  await recordingRef.update({ status: "transcribing" });
-
   try {
-    const transcript = await transcribeFromUrl(recording.audioUrl);
-    await recordingRef.update({
-      transcript: transcript.segments,
-      language: transcript.language,
-      status: "analyzing"
-    });
+    let transcriptSegments = Array.isArray(recording.transcript) ? recording.transcript : [];
+    let transcriptText = transcriptSegments.map((segment) => String(segment.text || "")).join(" ").trim();
+
+    if (!transcriptText) {
+      await recordingRef.update({ status: "transcribing" });
+      const transcript = await transcribeFromUrl(recording.audioUrl);
+      transcriptSegments = transcript.segments;
+      transcriptText = transcript.text;
+      await recordingRef.update({
+        transcript: transcript.segments,
+        language: transcript.language,
+        status: mode === "transcript" ? "ready" : "analyzing"
+      });
+    }
+
+    if (mode === "transcript") {
+      return { ok: true };
+    }
+
+    if (!transcriptText) {
+      throw new HttpsError("failed-precondition", "Transkript fehlt.");
+    }
+
+    await recordingRef.update({ status: "analyzing" });
 
     const appSettings = await getStoredAppSettings();
-    const analysis = await analyzeTranscript(transcript.text, appSettings.summaryModel);
+    const analysis = await analyzeTranscript(transcriptText, appSettings.summaryModel);
     await recordingRef.update({
       ...analysis,
       status: "done"

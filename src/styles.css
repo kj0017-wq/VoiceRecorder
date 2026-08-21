@@ -508,6 +508,7 @@ button {
   background: rgba(255, 26, 26, 0.18);
 }
 
+.latest-app-shell .progress-ready,
 .latest-app-shell .progress-done {
   color: #99f6e4;
   background: rgba(20, 184, 166, 0.16);
@@ -957,6 +958,12 @@ button {
 
 .latest-content-body p {
   color: rgba(255, 255, 255, 0.78);
+}
+
+.lazy-processing-action {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
 }
 
 .latest-setting-row {
@@ -1824,6 +1831,7 @@ button {
   background: #f59e0b;
 }
 
+.status-ready,
 .status-done {
   background: #10b981;
 }
@@ -1961,6 +1969,11 @@ button {
 .progress-error {
   color: #be123c;
   background: #ffe4e6;
+}
+
+.progress-ready {
+  color: #0f766e;
+  background: #ccfbf1;
 }
 
 .recording-cluster.is-open .cluster-summary {

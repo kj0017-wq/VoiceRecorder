@@ -81,7 +81,7 @@ export async function createRecordingFromAudio(
     onProgress?.(100);
     return createLocalRecording(file, {
       ...baseRecording,
-      shortSummary: "Aufnahme gespeichert."
+      shortSummary: ""
     });
   }
 
@@ -109,22 +109,22 @@ export async function createRecordingFromAudio(
     await setDoc(docRef, {
       ...baseRecording,
       audioUrl,
-      status: "transcribing",
-      shortSummary: "Audio wurde hochgeladen und wird verarbeitet.",
+      status: "ready",
+      shortSummary: "",
       createdAt: serverTimestamp()
     });
-    await requestProcessing(docRef.id).catch(() => undefined);
 
     return {
       id: docRef.id,
       ...baseRecording,
       audioUrl,
-      status: "transcribing"
+      status: "ready",
+      shortSummary: ""
     };
   } catch {
     return createLocalRecording(file, {
       ...baseRecording,
-      shortSummary: "Aufnahme gespeichert."
+      shortSummary: ""
     });
   }
 }
@@ -141,14 +141,14 @@ export async function deleteRecording(recording: Recording): Promise<void> {
   }
 }
 
-export async function retryRecordingProcessing(recordingId: string): Promise<void> {
+export async function retryRecordingProcessing(recordingId: string, mode: "transcript" | "summary" = "summary"): Promise<void> {
   if (!firebase.db || !firebase.functions) return;
 
   await updateDoc(doc(firebase.db, collectionName, recordingId), {
-    status: "transcribing",
+    status: mode === "transcript" ? "transcribing" : "analyzing",
     errorMessage: ""
   });
-  await requestProcessing(recordingId);
+  await requestProcessing(recordingId, mode);
 }
 
 export async function renameRecording(recording: Recording, title: string): Promise<void> {
@@ -248,10 +248,10 @@ export async function exportRecordingToDropbox(recording: Recording): Promise<{ 
   }
 }
 
-async function requestProcessing(recordingId: string): Promise<void> {
+async function requestProcessing(recordingId: string, mode: "transcript" | "summary"): Promise<void> {
   if (!firebase.functions) return;
   const processRecording = httpsCallable(firebase.functions, "processRecording");
-  await processRecording({ recordingId });
+  await processRecording({ recordingId, mode });
 }
 
 function getCallableErrorMessage(error: unknown, fallback: string): string {
@@ -297,7 +297,7 @@ function createLocalRecording(file: Blob, recording: Omit<Recording, "id">): Rec
     id: crypto.randomUUID(),
     ...recording,
     audioUrl: URL.createObjectURL(file),
-    status: "transcribing"
+    status: "ready"
   };
   saveLocalRecording(localRecording);
   return localRecording;

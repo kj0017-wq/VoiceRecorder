@@ -272,7 +272,7 @@ export function App() {
       const saved = await createRecordingFromAudio(blob, { ...metadata, title }, userId, duration, setSavingProgress);
       setSelectedId(saved.id);
       setSavingProgress(100);
-      setNotice(saved.audioUrl ? "Aufnahme gespeichert und Verarbeitung gestartet." : "Aufnahme gespeichert.");
+      setNotice(saved.audioUrl ? "Aufnahme gespeichert. Transkript und Zusammenfassung können bei Bedarf erstellt werden." : "Aufnahme gespeichert.");
       if (returnToList) setMode("latest");
       recorder.discard();
       setMetadata({ title: createFallbackTitle(), category: "", project: "" });
@@ -386,9 +386,9 @@ export function App() {
     setSelectedId("");
   }
 
-  async function handleRetryTranscription(recording: Recording) {
-    setNotice("Transkript wird neu gestartet.");
-    await retryRecordingProcessing(recording.id);
+  async function handleStartProcessing(recording: Recording, mode: "transcript" | "summary") {
+    setNotice(mode === "transcript" ? "Transkript wird erstellt." : "Zusammenfassung wird erstellt.");
+    await retryRecordingProcessing(recording.id, mode);
   }
 
   async function handleRename(recording: Recording, title: string) {
@@ -598,7 +598,7 @@ export function App() {
                     onBack={() => setMode("recording")}
                     onDelete={() => handleDelete(selected)}
                     onRename={(title) => handleRename(selected, title)}
-                    onRetry={() => handleRetryTranscription(selected)}
+                    onRetry={(mode) => handleStartProcessing(selected, mode)}
                     onGenerateSpeech={(kind, targetLanguage) => handleGenerateSpeech(selected, kind, targetLanguage)}
                     onTranslate={(targetLanguage, source) => handleTranslate(selected, targetLanguage, source)}
                   />
@@ -1129,7 +1129,7 @@ function LatestRecordingDetail({
   onBack: () => void;
   onDelete: () => void;
   onRename: (title: string) => Promise<void>;
-  onRetry: () => void;
+  onRetry: (mode: "transcript" | "summary") => void;
   onGenerateSpeech: (
     kind: "summary" | "transcript" | "translation" | "transcriptTranslation",
     targetLanguage?: string
@@ -1244,7 +1244,7 @@ function LatestRecordingDetail({
             ) : null
           }
         >
-          <LatestTranscriptBlock recording={recording} onRetry={onRetry} />
+          <LatestTranscriptBlock recording={recording} onCreate={() => onRetry("transcript")} />
         </LatestContentRow>
         <LatestContentRow
           icon={<Target size={22} aria-hidden="true" />}
@@ -1262,7 +1262,16 @@ function LatestRecordingDetail({
             ) : null
           }
         >
-          <p>{recording.summary || recording.shortSummary || "Noch keine Zusammenfassung vorhanden."}</p>
+          {recording.summary || recording.shortSummary ? (
+            <p>{recording.summary || recording.shortSummary}</p>
+          ) : (
+            <div className="lazy-processing-action">
+              <p className="muted">Noch keine Zusammenfassung vorhanden.</p>
+              <button className="secondary-action compact-action" onClick={() => onRetry("summary")}>
+                Zusammenfassung erstellen
+              </button>
+            </div>
+          )}
         </LatestContentRow>
         <LatestContentRow
           icon={<Globe2 size={22} aria-hidden="true" />}
@@ -1343,13 +1352,13 @@ function LatestContentRow({
   );
 }
 
-function LatestTranscriptBlock({ recording, onRetry }: { recording: Recording; onRetry: () => void }) {
+function LatestTranscriptBlock({ recording, onCreate }: { recording: Recording; onCreate: () => void }) {
   if (recording.errorMessage) {
     return (
       <>
         <p className="error-text">{recording.errorMessage}</p>
         {recording.audioUrl ? (
-          <button className="secondary-action compact-action" onClick={onRetry}>
+          <button className="secondary-action compact-action" onClick={onCreate}>
             Transkript erneut starten
           </button>
         ) : null}
@@ -1359,18 +1368,25 @@ function LatestTranscriptBlock({ recording, onRetry }: { recording: Recording; o
 
   if (!recording.transcript.length) {
     return (
-      <p className="muted">
-        {recording.status === "transcribing" || recording.status === "analyzing"
-          ? "Das Transkript wird erstellt."
-          : "Noch kein Transkript vorhanden."}
-      </p>
+      <div className="lazy-processing-action">
+        <p className="muted">
+          {recording.status === "transcribing" || recording.status === "analyzing"
+            ? "Das Transkript wird erstellt."
+            : "Noch kein Transkript vorhanden."}
+        </p>
+        {recording.status !== "transcribing" && recording.status !== "analyzing" && recording.audioUrl ? (
+          <button className="secondary-action compact-action" onClick={onCreate}>
+            Transkript erstellen
+          </button>
+        ) : null}
+      </div>
     );
   }
 
   return (
     <>
       <div className="transcript-actions">
-        <button className="secondary-action compact-action" onClick={onRetry}>
+        <button className="secondary-action compact-action" onClick={onCreate}>
           Sprecher neu erkennen
         </button>
       </div>
@@ -1578,7 +1594,7 @@ function RecordingCluster({
   onToggle: () => void;
   onDelete: () => void;
   onRename: (title: string) => Promise<void>;
-  onRetry: () => void;
+  onRetry: (mode: "transcript" | "summary") => void;
   onGenerateSpeech: (
     kind: "summary" | "transcript" | "translation" | "transcriptTranslation",
     targetLanguage?: string
@@ -1645,7 +1661,7 @@ function RecordingCluster({
           <section className="cluster-section">
             <SimpleTranscript
               recording={recording}
-              onRetry={onRetry}
+              onCreate={() => onRetry("transcript")}
               onGenerateSpeech={() => onGenerateSpeech("transcript")}
               onTranslate={(targetLanguage) => onTranslate(targetLanguage, "transcript")}
               onGenerateTranslationSpeech={(targetLanguage) => onGenerateSpeech("transcriptTranslation", targetLanguage)}
@@ -1653,7 +1669,11 @@ function RecordingCluster({
           </section>
 
           <section className="cluster-section">
-            <SimpleSummary recording={recording} onGenerateSpeech={() => onGenerateSpeech("summary")} />
+            <SimpleSummary
+              recording={recording}
+              onCreate={() => onRetry("summary")}
+              onGenerateSpeech={() => onGenerateSpeech("summary")}
+            />
           </section>
 
           <section className="cluster-section">
@@ -1960,13 +1980,13 @@ function AudioTools({
 
 function SimpleTranscript({
   recording,
-  onRetry,
+  onCreate,
   onGenerateSpeech,
   onTranslate,
   onGenerateTranslationSpeech
 }: {
   recording: Recording;
-  onRetry: () => void;
+  onCreate: () => void;
   onGenerateSpeech: () => Promise<string>;
   onTranslate: (targetLanguage: string) => Promise<void>;
   onGenerateTranslationSpeech: (targetLanguage: string) => Promise<string>;
@@ -1985,7 +2005,7 @@ function SimpleTranscript({
           <>
         <p className="error-text">{recording.errorMessage}</p>
         {recording.audioUrl ? (
-          <button className="secondary-action" onClick={onRetry}>
+          <button className="secondary-action" onClick={onCreate}>
             Transkript erneut starten
           </button>
         ) : null}
@@ -2003,11 +2023,18 @@ function SimpleTranscript({
           <strong>{isOpen ? "Schließen" : "Öffnen"}</strong>
         </button>
         {isOpen ? (
-          <p className="muted">
-            {recording.status === "transcribing" || recording.status === "analyzing"
-              ? "Das Transkript wird erstellt."
-              : "Noch kein Transkript vorhanden."}
-          </p>
+          <div className="lazy-processing-action">
+            <p className="muted">
+              {recording.status === "transcribing" || recording.status === "analyzing"
+                ? "Das Transkript wird erstellt."
+                : "Noch kein Transkript vorhanden."}
+            </p>
+            {recording.status !== "transcribing" && recording.status !== "analyzing" && recording.audioUrl ? (
+              <button className="secondary-action compact-action" onClick={onCreate}>
+                Transkript erstellen
+              </button>
+            ) : null}
+          </div>
         ) : null}
       </section>
     );
@@ -2029,7 +2056,7 @@ function SimpleTranscript({
       {isOpen ? (
         <>
       <div className="transcript-actions">
-        <button className="secondary-action compact-action" onClick={onRetry}>
+        <button className="secondary-action compact-action" onClick={onCreate}>
           Sprecher neu erkennen
         </button>
       </div>
@@ -2055,9 +2082,11 @@ function SimpleTranscript({
 
 function SimpleSummary({
   recording,
+  onCreate,
   onGenerateSpeech
 }: {
   recording: Recording;
+  onCreate: () => void;
   onGenerateSpeech: () => Promise<string>;
 }) {
   const summary = recording.summary || recording.shortSummary;
@@ -2082,11 +2111,18 @@ function SimpleSummary({
         summary ? (
           <p>{summary}</p>
         ) : (
-          <p className="muted">
-            {recording.status === "analyzing" || recording.status === "transcribing"
-              ? "Die Zusammenfassung wird erstellt."
-              : "Noch keine Zusammenfassung vorhanden."}
-          </p>
+          <div className="lazy-processing-action">
+            <p className="muted">
+              {recording.status === "analyzing" || recording.status === "transcribing"
+                ? "Die Zusammenfassung wird erstellt."
+                : "Noch keine Zusammenfassung vorhanden."}
+            </p>
+            {recording.status !== "transcribing" && recording.status !== "analyzing" && recording.audioUrl ? (
+              <button className="secondary-action compact-action" onClick={onCreate}>
+                Zusammenfassung erstellen
+              </button>
+            ) : null}
+          </div>
         )
       ) : null}
     </section>

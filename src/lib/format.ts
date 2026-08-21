@@ -38,6 +38,7 @@ export function createFallbackTitle(date = new Date()): string {
 export function statusLabel(status: string): string {
   const labels: Record<string, string> = {
     recording: "Aufnahme",
+    ready: "Audio bereit",
     uploading: "Upload",
     transcribing: "Transkription",
     analyzing: "KI-Auswertung",

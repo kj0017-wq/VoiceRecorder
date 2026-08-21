@@ -1,5 +1,6 @@
 export type RecordingStatus =
   | "recording"
+  | "ready"
   | "uploading"
   | "transcribing"
   | "analyzing"
