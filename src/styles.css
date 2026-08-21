@@ -954,6 +954,48 @@ button {
   background: #34d399;
 }
 
+.latest-app-shell .latest-detail-screen .recording-cluster,
+.latest-app-shell .latest-detail-screen .cluster-summary,
+.latest-app-shell .latest-detail-screen .cluster-section {
+  display: initial;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.latest-app-shell .latest-detail-screen .elevenlabs-controls {
+  position: static;
+  margin: 0;
+  transform: none;
+}
+
+.latest-app-shell .latest-content-trailing .section-controls {
+  display: inline-flex;
+}
+
+.latest-app-shell .latest-content-trailing .round-audio-toggle,
+.latest-app-shell .latest-content-trailing .generate-audio-toggle {
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  min-height: 42px;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #ff3131;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.latest-app-shell .latest-content-trailing .round-audio-toggle.is-playing {
+  color: #ffffff;
+  background: #dc171d;
+}
+
+.latest-app-shell .latest-detail-screen .secondary-action {
+  border-color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.055);
+}
+
 .recorder-home {
   position: relative;
   display: grid;
