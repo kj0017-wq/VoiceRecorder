@@ -62,12 +62,15 @@ export function useRecorder(): RecorderResult {
   }, []);
 
   const startVolumeMeter = useCallback((stream: MediaStream, monitorOutput = false) => {
-    const audioContext = new AudioContext();
+    const AudioContextCtor =
+      window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextCtor) throw new Error("AudioContext ist nicht verfügbar.");
+    const audioContext = new AudioContextCtor();
     audioContextRef.current = audioContext;
     const source = audioContext.createMediaStreamSource(stream);
     const analyser = audioContext.createAnalyser();
-    analyser.fftSize = 1024;
-    analyser.smoothingTimeConstant = 0.82;
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.58;
     const data = new Uint8Array(analyser.fftSize);
     source.connect(analyser);
     if (monitorOutput) {
@@ -75,8 +78,8 @@ export function useRecorder(): RecorderResult {
       monitorGain.gain.value = 0.85;
       source.connect(monitorGain);
       monitorGain.connect(audioContext.destination);
-      audioContext.resume().catch(() => undefined);
     }
+    audioContext.resume().catch(() => undefined);
 
     const tick = () => {
       analyser.getByteTimeDomainData(data);
@@ -87,13 +90,16 @@ export function useRecorder(): RecorderResult {
       for (let index = 0; index < data.length; index += 1) {
         const normalized = (data[index] - 128) / 128;
         sumSquares += normalized * normalized;
-        if (index % sampleStep === 0 && samples.length < 48) samples.push(normalized);
+        if (index % sampleStep === 0 && samples.length < 48) {
+          samples.push(Math.max(-1, Math.min(1, normalized * 5)));
+        }
       }
 
       const rms = Math.sqrt(sumSquares / data.length);
       const nextDecibels = Math.max(-60, Math.min(0, 20 * Math.log10(rms || 0.0001)));
+      const visibleLevel = Math.min(100, Math.round(Math.sqrt(Math.min(1, rms * 9)) * 100));
       setDecibels(Math.round(nextDecibels));
-      setVolume(Math.max(0, Math.min(100, Math.round(((nextDecibels + 60) / 60) * 100))));
+      setVolume(visibleLevel);
       setWaveform(samples);
       analyserFrameRef.current = requestAnimationFrame(tick);
     };
