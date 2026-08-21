@@ -634,6 +634,7 @@ function normalizeAppSettings(value: unknown) {
     speed: clampNumber(input.speed, 0.7, 1.2, 1),
     bluetoothLatencyMs: clampNumber(input.bluetoothLatencyMs, 0, 500, 180),
     playbackGain: clampNumber(input.playbackGain, 0.5, 2, 1),
+    amplitudeGain: clampNumber(input.amplitudeGain, 0.5, 5, 1.5),
     equalizerLow: clampNumber(input.equalizerLow, -12, 12, 0),
     equalizerMid: clampNumber(input.equalizerMid, -12, 12, 0),
     equalizerHigh: clampNumber(input.equalizerHigh, -12, 12, 0),

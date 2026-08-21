@@ -79,6 +79,7 @@ const defaultVoiceSettings = {
   speed: 1,
   bluetoothLatencyMs: 180,
   playbackGain: 1,
+  amplitudeGain: 1.5,
   equalizerLow: 0,
   equalizerMid: 0,
   equalizerHigh: 0,
@@ -89,7 +90,7 @@ const defaultVoiceSettings = {
 
 type PlaybackSettings = Pick<
   typeof defaultVoiceSettings,
-  "bluetoothLatencyMs" | "playbackGain" | "equalizerLow" | "equalizerMid" | "equalizerHigh"
+  "bluetoothLatencyMs" | "playbackGain" | "amplitudeGain" | "equalizerLow" | "equalizerMid" | "equalizerHigh"
 >;
 
 const fallbackVoices: ElevenLabsVoice[] = [
@@ -588,7 +589,7 @@ export function App() {
             <div className="live-panel-heading">
               <span>Amplitude (Live)</span>
             </div>
-            <LiveWaveform values={recorder.waveform} />
+            <LiveWaveform values={recorder.waveform} amplitudeGain={voiceSettings.amplitudeGain} />
           </section>
 
           <section className="live-panel" aria-label="Lautstärke live">
@@ -1146,6 +1147,15 @@ function EqualizerScreen({
           step={0.05}
           unit="x"
           onChange={(value) => update("playbackGain", value)}
+        />
+        <SettingSlider
+          label="Amplitude"
+          value={settings.amplitudeGain}
+          min={0.5}
+          max={5}
+          step={0.1}
+          unit="x"
+          onChange={(value) => update("amplitudeGain", value)}
         />
         <SettingSlider
           label="Bass"
@@ -1983,14 +1993,15 @@ function AudioMark() {
   return <img className="audio-mark" src="/logo-192.png" alt="" aria-hidden="true" />;
 }
 
-function LiveWaveform({ values }: { values: number[] }) {
+function LiveWaveform({ values, amplitudeGain }: { values: number[]; amplitudeGain: number }) {
   const points = values.length ? values : Array(48).fill(0);
+  const gain = Number.isFinite(amplitudeGain) ? Math.max(0.5, Math.min(5, amplitudeGain)) : 1;
 
   return (
     <div className="live-waveform" aria-hidden="true">
       <div className="waveform-zero-line" />
       {points.map((value, index) => {
-        const height = Math.max(3, Math.round(Math.abs(value) * 128));
+        const height = Math.max(3, Math.min(72, Math.round(Math.abs(value) * 128 * gain)));
         return <span key={`${index}-${height}`} style={{ height: `${height}px` }} />;
       })}
     </div>
