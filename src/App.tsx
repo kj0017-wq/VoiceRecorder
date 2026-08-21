@@ -18,7 +18,6 @@ import {
   FileAudio,
   FileText,
   Globe2,
-  List,
   Loader2,
   Menu,
   Mic,
@@ -1164,7 +1163,7 @@ function LatestRecordingDetail({
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isRenaming, setIsRenaming] = useState(false);
   const [draftTitle, setDraftTitle] = useState(recording.title);
-  const [openPanel, setOpenPanel] = useState<"" | "transcript" | "topic" | "summary" | "translation" | "export">("");
+  const [openPanel, setOpenPanel] = useState<"" | "transcript" | "summary" | "translation" | "export">("");
   const [targetLanguage, setTargetLanguage] = useState("en");
   const [isTranslating, setIsTranslating] = useState(false);
 
@@ -1273,30 +1272,12 @@ function LatestRecordingDetail({
         </LatestContentRow>
         <LatestContentRow
           icon={<Target size={22} aria-hidden="true" />}
-          title="Hauptthema"
-          subtitle="Wesentliche Inhalte auf einen Blick"
-          isOpen={openPanel === "topic"}
-          onClick={() => setOpenPanel((current) => (current === "topic" ? "" : "topic"))}
-          audioControl={
-            recording.shortSummary || recording.summary ? (
-              <ElevenLabsControls
-                audioUrl={recording.elevenLabsSummaryAudioUrl}
-                storageKey={`elevenlabs:${recording.id}:summary`}
-                onGenerate={() => onGenerateSpeech("summary")}
-              />
-            ) : null
-          }
-        >
-          <p>{recording.shortSummary || "Das Hauptthema wird nach der Verarbeitung angezeigt."}</p>
-        </LatestContentRow>
-        <LatestContentRow
-          icon={<List size={22} aria-hidden="true" />}
           title="Zusammenfassung"
-          subtitle="Kernaussagen kompakt zusammengefasst"
+          subtitle="Wesentliche Inhalte auf einen Blick"
           isOpen={openPanel === "summary"}
           onClick={() => setOpenPanel((current) => (current === "summary" ? "" : "summary"))}
           audioControl={
-            recording.summary ? (
+            recording.shortSummary || recording.summary ? (
               <ElevenLabsControls
                 audioUrl={recording.elevenLabsSummaryAudioUrl}
                 storageKey={`elevenlabs:${recording.id}:summary`}
@@ -2187,14 +2168,14 @@ function SimpleSummary({
   recording: Recording;
   onGenerateSpeech: () => Promise<string>;
 }) {
-  const summary = recording.shortSummary || recording.summary;
+  const summary = recording.summary || recording.shortSummary;
   const [isOpen, setIsOpen] = useState(false);
 
   return (
     <section className="simple-summary">
       <div className="section-heading-row">
         <button className="section-toggle" onClick={() => setIsOpen((current) => !current)} aria-expanded={isOpen}>
-          <h3>Hauptthema</h3>
+          <h3>Zusammenfassung</h3>
           <strong>{isOpen ? "Schließen" : "Öffnen"}</strong>
         </button>
       {summary ? (
