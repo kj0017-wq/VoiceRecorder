@@ -1260,13 +1260,19 @@ function LatestRecordingDetail({
           isOpen={openPanel === "summary"}
           onClick={() => setOpenPanel((current) => (current === "summary" ? "" : "summary"))}
           audioControl={
-            summaryText ? (
-              <ElevenLabsControls
-                audioUrl={recording.elevenLabsSummaryAudioUrl}
-                storageKey={`elevenlabs:${recording.id}:summary`}
-                onGenerate={() => onGenerateSpeech("summary")}
-              />
-            ) : null
+            <ElevenLabsControls
+              audioUrl={recording.elevenLabsSummaryAudioUrl}
+              storageKey={`elevenlabs:${recording.id}:summary`}
+              onPrepare={
+                summaryText
+                  ? undefined
+                  : async () => {
+                      await onRetry("summary");
+                      return "Zusammenfassung wird erstellt. Danach kann sie vorgelesen werden.";
+                    }
+              }
+              onGenerate={() => onGenerateSpeech("summary")}
+            />
           }
         >
           {summaryText ? (
@@ -1274,9 +1280,6 @@ function LatestRecordingDetail({
           ) : (
             <div className="lazy-processing-action">
               <p className="muted">Noch keine Zusammenfassung vorhanden.</p>
-              <button className="secondary-action compact-action" onClick={() => onRetry("summary")}>
-                Zusammenfassung erstellen
-              </button>
             </div>
           )}
         </LatestContentRow>
@@ -2109,13 +2112,21 @@ function SimpleSummary({
           <h3>Zusammenfassung</h3>
           <strong>{isOpen ? "Schließen" : "Öffnen"}</strong>
         </button>
-      {summary ? (
-          <ElevenLabsControls
-            audioUrl={recording.elevenLabsSummaryAudioUrl}
-            storageKey={`elevenlabs:${recording.id}:summary`}
-            onGenerate={onGenerateSpeech}
-          />
-      ) : null}
+        {recording.audioUrl && recording.status !== "transcribing" && recording.status !== "analyzing" ? (
+            <ElevenLabsControls
+              audioUrl={recording.elevenLabsSummaryAudioUrl}
+              storageKey={`elevenlabs:${recording.id}:summary`}
+              onPrepare={
+                summary
+                  ? undefined
+                  : async () => {
+                      await onCreate();
+                      return "Zusammenfassung wird erstellt. Danach kann sie vorgelesen werden.";
+                    }
+              }
+              onGenerate={onGenerateSpeech}
+            />
+        ) : null}
       </div>
       {isOpen ? (
         summary ? (
@@ -2127,11 +2138,6 @@ function SimpleSummary({
                 ? "Die Zusammenfassung wird erstellt."
                 : "Noch keine Zusammenfassung vorhanden."}
             </p>
-            {recording.status !== "transcribing" && recording.status !== "analyzing" && recording.audioUrl ? (
-              <button className="secondary-action compact-action" onClick={onCreate}>
-                Zusammenfassung erstellen
-              </button>
-            ) : null}
           </div>
         )
       ) : null}
