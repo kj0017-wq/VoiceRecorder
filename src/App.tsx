@@ -1187,7 +1187,7 @@ function LatestRecordingDetail({
 
         <div className="latest-audio-stage">
           {recording.audioUrl ? <RoundAudioToggle audioRef={audioRef} audioUrl={recording.audioUrl} label="Aufzeichnung" /> : null}
-          <StaticAudioWaveform seed={recording.id} />
+          <AudioAmplitudeWaveform audioUrl={recording.audioUrl} />
           <div className="latest-audio-times">
             <span>00:00</span>
             <span>{formatDuration(recording.duration)}</span>
@@ -1448,12 +1448,39 @@ function LatestExportControls({ recording }: { recording: Recording }) {
   );
 }
 
-function StaticAudioWaveform({ seed }: { seed: string }) {
-  const source = seed || "recording";
-  const bars = Array.from({ length: 54 }, (_, index) => {
-    const code = source.charCodeAt(index % source.length) || 7;
-    return 14 + ((code * (index + 5)) % 44);
-  });
+function AudioAmplitudeWaveform({ audioUrl }: { audioUrl: string }) {
+  const [bars, setBars] = useState<number[]>(() => Array(54).fill(18));
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function analyzeAudio() {
+      if (!audioUrl) {
+        setBars(Array(54).fill(18));
+        return;
+      }
+
+      try {
+        const response = await fetch(audioUrl);
+        const audioData = await response.arrayBuffer();
+        const AudioContextCtor =
+          window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (!AudioContextCtor) throw new Error("AudioContext ist nicht verfügbar.");
+        const audioContext = new AudioContextCtor();
+        const buffer = await audioContext.decodeAudioData(audioData.slice(0));
+        await audioContext.close().catch(() => undefined);
+        if (isCancelled) return;
+        setBars(createAmplitudeBars(buffer, 54));
+      } catch {
+        if (!isCancelled) setBars(Array(54).fill(18));
+      }
+    }
+
+    void analyzeAudio();
+    return () => {
+      isCancelled = true;
+    };
+  }, [audioUrl]);
 
   return (
     <div className="latest-waveform" aria-hidden="true">
@@ -1462,6 +1489,28 @@ function StaticAudioWaveform({ seed }: { seed: string }) {
       ))}
     </div>
   );
+}
+
+function createAmplitudeBars(buffer: AudioBuffer, barCount: number) {
+  const channelData = buffer.getChannelData(0);
+  const samplesPerBar = Math.max(1, Math.floor(channelData.length / barCount));
+  const rawBars = Array.from({ length: barCount }, (_, barIndex) => {
+    const start = barIndex * samplesPerBar;
+    const end = Math.min(channelData.length, start + samplesPerBar);
+    let sumSquares = 0;
+
+    for (let index = start; index < end; index += 1) {
+      sumSquares += channelData[index] * channelData[index];
+    }
+
+    return Math.sqrt(sumSquares / Math.max(1, end - start));
+  });
+  const peak = Math.max(...rawBars, 0.001);
+
+  return rawBars.map((value) => {
+    const normalized = Math.pow(value / peak, 0.55);
+    return Math.round(8 + normalized * 56);
+  });
 }
 
 function getCleanRecordingTitle(title: string) {
