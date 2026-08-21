@@ -1535,19 +1535,14 @@ function AudioAmplitudeWaveform({
     };
   }, [audioRef, audioUrl]);
 
-  const activeBar = Math.min(bars.length - 1, Math.floor(playedRatio * bars.length));
+  const activeBar = Math.floor(playedRatio * bars.length);
 
   return (
     <div className="latest-waveform" aria-hidden="true">
       {bars.map((height, index) => (
         <span
           key={`${height}-${index}`}
-          className={[
-            index <= activeBar && playedRatio > 0 ? "is-played" : "",
-            index === activeBar && playedRatio > 0 ? "is-current" : ""
-          ]
-            .filter(Boolean)
-            .join(" ")}
+          className={index <= activeBar && playedRatio > 0 ? "is-played" : ""}
           style={{ height: `${height}px` }}
         />
       ))}
@@ -1556,30 +1551,24 @@ function AudioAmplitudeWaveform({
 }
 
 function createAmplitudeBars(buffer: AudioBuffer, barCount: number) {
-  const channels = Array.from({ length: buffer.numberOfChannels }, (_, index) => buffer.getChannelData(index));
-  const samplesPerBar = Math.max(1, Math.floor(buffer.length / barCount));
+  const channelData = buffer.getChannelData(0);
+  const samplesPerBar = Math.max(1, Math.floor(channelData.length / barCount));
   const rawBars = Array.from({ length: barCount }, (_, barIndex) => {
     const start = barIndex * samplesPerBar;
-    const end = Math.min(buffer.length, start + samplesPerBar);
+    const end = Math.min(channelData.length, start + samplesPerBar);
     let sumSquares = 0;
-    let sampleCount = 0;
 
     for (let index = start; index < end; index += 1) {
-      for (const channelData of channels) {
-        sumSquares += channelData[index] * channelData[index];
-        sampleCount += 1;
-      }
+      sumSquares += channelData[index] * channelData[index];
     }
 
-    return Math.sqrt(sumSquares / Math.max(1, sampleCount));
+    return Math.sqrt(sumSquares / Math.max(1, end - start));
   });
-  const sorted = [...rawBars].sort((left, right) => left - right);
-  const reference = Math.max(sorted[Math.floor(sorted.length * 0.86)] ?? 0, 0.0008);
+  const peak = Math.max(...rawBars, 0.001);
 
   return rawBars.map((value) => {
-    const boosted = Math.min(1, value / (reference * 0.72));
-    const normalized = Math.pow(boosted, 0.32);
-    return Math.round(10 + normalized * 62);
+    const normalized = Math.pow(value / peak, 0.55);
+    return Math.round(8 + normalized * 56);
   });
 }
 
