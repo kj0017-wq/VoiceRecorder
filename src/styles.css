@@ -766,6 +766,12 @@ button {
   width: 2px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.42);
+  transition: background 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+}
+
+.latest-waveform span.is-played {
+  background: #ff3131;
+  box-shadow: 0 0 10px rgba(255, 49, 49, 0.55);
 }
 
 .latest-audio-times {

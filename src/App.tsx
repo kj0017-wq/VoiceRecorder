@@ -1187,7 +1187,7 @@ function LatestRecordingDetail({
 
         <div className="latest-audio-stage">
           {recording.audioUrl ? <RoundAudioToggle audioRef={audioRef} audioUrl={recording.audioUrl} label="Aufzeichnung" /> : null}
-          <AudioAmplitudeWaveform audioUrl={recording.audioUrl} />
+          <AudioAmplitudeWaveform audioUrl={recording.audioUrl} audioRef={audioRef} />
           <div className="latest-audio-times">
             <span>00:00</span>
             <span>{formatDuration(recording.duration)}</span>
@@ -1448,11 +1448,19 @@ function LatestExportControls({ recording }: { recording: Recording }) {
   );
 }
 
-function AudioAmplitudeWaveform({ audioUrl }: { audioUrl: string }) {
+function AudioAmplitudeWaveform({
+  audioUrl,
+  audioRef
+}: {
+  audioUrl: string;
+  audioRef: RefObject<HTMLAudioElement | null>;
+}) {
   const [bars, setBars] = useState<number[]>(() => Array(54).fill(18));
+  const [playedRatio, setPlayedRatio] = useState(0);
 
   useEffect(() => {
     let isCancelled = false;
+    setPlayedRatio(0);
 
     async function analyzeAudio() {
       if (!audioUrl) {
@@ -1482,10 +1490,61 @@ function AudioAmplitudeWaveform({ audioUrl }: { audioUrl: string }) {
     };
   }, [audioUrl]);
 
+  useEffect(() => {
+    const player = audioRef.current;
+    if (!player) return undefined;
+    let frame = 0;
+
+    const updatePlaybackPosition = () => {
+      const duration = Number.isFinite(player.duration) && player.duration > 0 ? player.duration : 0;
+      setPlayedRatio(duration ? Math.min(1, Math.max(0, player.currentTime / duration)) : 0);
+    };
+
+    const tick = () => {
+      updatePlaybackPosition();
+      if (!player.paused && !player.ended) frame = requestAnimationFrame(tick);
+    };
+
+    const handlePlay = () => {
+      cancelAnimationFrame(frame);
+      tick();
+    };
+    const handlePause = () => {
+      cancelAnimationFrame(frame);
+      updatePlaybackPosition();
+    };
+    const handleEnded = () => {
+      cancelAnimationFrame(frame);
+      setPlayedRatio(0);
+    };
+
+    player.addEventListener("loadedmetadata", updatePlaybackPosition);
+    player.addEventListener("timeupdate", updatePlaybackPosition);
+    player.addEventListener("play", handlePlay);
+    player.addEventListener("pause", handlePause);
+    player.addEventListener("ended", handleEnded);
+    updatePlaybackPosition();
+
+    return () => {
+      cancelAnimationFrame(frame);
+      player.removeEventListener("loadedmetadata", updatePlaybackPosition);
+      player.removeEventListener("timeupdate", updatePlaybackPosition);
+      player.removeEventListener("play", handlePlay);
+      player.removeEventListener("pause", handlePause);
+      player.removeEventListener("ended", handleEnded);
+    };
+  }, [audioRef, audioUrl]);
+
+  const activeBar = Math.floor(playedRatio * bars.length);
+
   return (
     <div className="latest-waveform" aria-hidden="true">
       {bars.map((height, index) => (
-        <span key={`${height}-${index}`} style={{ height: `${height}px` }} />
+        <span
+          key={`${height}-${index}`}
+          className={index <= activeBar && playedRatio > 0 ? "is-played" : ""}
+          style={{ height: `${height}px` }}
+        />
       ))}
     </div>
   );
