@@ -10,6 +10,8 @@ export interface RecorderResult {
   waveform: number[];
   audioBlob: Blob | null;
   error: string;
+  isMicrophoneReady: boolean;
+  prepare: (monitorOutput?: boolean) => Promise<void>;
   start: (keepScreenAwake?: boolean, monitorOutput?: boolean) => Promise<void>;
   pause: () => void;
   resume: () => void;
@@ -25,6 +27,7 @@ export function useRecorder(): RecorderResult {
   const [waveform, setWaveform] = useState<number[]>(Array(48).fill(0));
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [error, setError] = useState("");
+  const [isMicrophoneReady, setIsMicrophoneReady] = useState(false);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -49,19 +52,25 @@ export function useRecorder(): RecorderResult {
     }
   }, []);
 
-  const releaseStream = useCallback(() => {
-    keepScreenAwakeRef.current = false;
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
-    wakeLockRef.current?.release().catch(() => undefined);
-    wakeLockRef.current = null;
+  const stopVolumeMeter = useCallback(() => {
     if (analyserFrameRef.current) cancelAnimationFrame(analyserFrameRef.current);
     analyserFrameRef.current = null;
     audioContextRef.current?.close().catch(() => undefined);
     audioContextRef.current = null;
   }, []);
 
+  const releaseStream = useCallback(() => {
+    keepScreenAwakeRef.current = false;
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    setIsMicrophoneReady(false);
+    wakeLockRef.current?.release().catch(() => undefined);
+    wakeLockRef.current = null;
+    stopVolumeMeter();
+  }, [stopVolumeMeter]);
+
   const startVolumeMeter = useCallback((stream: MediaStream, monitorOutput = false) => {
+    stopVolumeMeter();
     const AudioContextCtor =
       window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioContextCtor) throw new Error("AudioContext ist nicht verfügbar.");
@@ -105,7 +114,22 @@ export function useRecorder(): RecorderResult {
     };
 
     tick();
-  }, []);
+  }, [stopVolumeMeter]);
+
+  const prepare = useCallback(async (monitorOutput = false) => {
+    if (recorderRef.current?.state === "recording" || recorderRef.current?.state === "paused") return;
+
+    try {
+      setError("");
+      const stream = streamRef.current ?? (await getPreferredMicrophoneStream());
+      streamRef.current = stream;
+      setIsMicrophoneReady(true);
+      startVolumeMeter(stream, monitorOutput);
+    } catch {
+      setIsMicrophoneReady(false);
+      setError("Mikrofonzugriff wurde verweigert oder ist nicht verfügbar.");
+    }
+  }, [startVolumeMeter]);
 
   const start = useCallback(async (keepScreenAwake = true, monitorOutput = false) => {
     try {
@@ -116,8 +140,9 @@ export function useRecorder(): RecorderResult {
       setWaveform(Array(48).fill(0));
       setDecibels(-60);
       setVolume(0);
-      const stream = await getPreferredMicrophoneStream();
+      const stream = streamRef.current ?? (await getPreferredMicrophoneStream());
       streamRef.current = stream;
+      setIsMicrophoneReady(true);
       const mimeType = getSupportedMimeType();
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       recorderRef.current = recorder;
@@ -205,7 +230,22 @@ export function useRecorder(): RecorderResult {
 
   useEffect(() => releaseStream, [releaseStream]);
 
-  return { state, elapsedSeconds, volume, decibels, waveform, audioBlob, error, start, pause, resume, stop, discard };
+  return {
+    state,
+    elapsedSeconds,
+    volume,
+    decibels,
+    waveform,
+    audioBlob,
+    error,
+    isMicrophoneReady,
+    prepare,
+    start,
+    pause,
+    resume,
+    stop,
+    discard
+  };
 }
 
 function getSupportedMimeType(): string {
