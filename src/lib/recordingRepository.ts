@@ -332,8 +332,8 @@ function normalizeRecording(id: string, data: DocumentData): Recording {
     language: String(data.language ?? ""),
     audioUrl: String(data.audioUrl ?? ""),
     status: data.status ?? "uploading",
-    shortSummary: String(data.shortSummary ?? ""),
-    summary: String(data.summary ?? ""),
+    shortSummary: normalizeTextValue(data.shortSummary),
+    summary: normalizeTextValue(data.summary),
     topics: Array.isArray(data.topics) ? data.topics : [],
     decisions: Array.isArray(data.decisions) ? data.decisions : [],
     tasks: Array.isArray(data.tasks) ? data.tasks : [],
@@ -368,4 +368,16 @@ function normalizeRecording(id: string, data: DocumentData): Recording {
       : undefined,
     errorMessage: data.errorMessage ? String(data.errorMessage) : undefined
   };
+}
+
+function normalizeTextValue(value: unknown): string {
+  if (typeof value === "string") return value === "[object Object]" ? "" : value;
+  if (Array.isArray(value)) return value.map((item) => normalizeTextValue(item)).filter(Boolean).join("\n");
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const preferred = record.text ?? record.content ?? record.summary ?? record.description;
+    if (preferred !== undefined) return normalizeTextValue(preferred);
+    return Object.values(record).map((item) => normalizeTextValue(item)).filter(Boolean).join("\n");
+  }
+  return "";
 }

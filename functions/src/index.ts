@@ -348,7 +348,7 @@ export const exportRecordingToDropbox = onCall(
     console.info("Dropbox export context", dropboxContext);
     await ensureDropboxFolder(accessToken, folderPath);
 
-    const summary = String(recording.shortSummary || recording.summary || "").trim();
+    const summary = getRecordingSummaryText(recording);
     const transcript = getTranscriptText(recording);
     const protocol = buildDropboxProtocol(recording);
 
@@ -473,7 +473,28 @@ async function analyzeTranscript(transcript: string, model: string) {
     throw new Error("KI-Auswertung ohne Inhalt.");
   }
 
-  return JSON.parse(content) as Record<string, unknown>;
+  const parsed = JSON.parse(content) as Record<string, unknown>;
+  return {
+    ...parsed,
+    shortSummary: normalizeTextValue(parsed.shortSummary),
+    summary: normalizeTextValue(parsed.summary)
+  };
+}
+
+function normalizeTextValue(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (Array.isArray(value)) return value.map((item) => normalizeTextValue(item)).filter(Boolean).join("\n");
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const preferred = record.text ?? record.content ?? record.summary ?? record.description;
+    if (preferred !== undefined) return normalizeTextValue(preferred);
+    return Object.values(record).map((item) => normalizeTextValue(item)).filter(Boolean).join("\n");
+  }
+  return "";
+}
+
+function getRecordingSummaryText(recording: Record<string, unknown>): string {
+  return normalizeTextValue(recording.summary) || normalizeTextValue(recording.shortSummary);
 }
 
 function getOpenAI(): OpenAI {
@@ -632,7 +653,7 @@ function getSpeechText(
   if (!recording) return "";
 
   if (kind === "summary") {
-    return String(recording.shortSummary || recording.summary || "").slice(0, 4500);
+    return getRecordingSummaryText(recording).slice(0, 4500);
   }
 
   if (kind === "translation") {
@@ -1010,7 +1031,7 @@ function buildDropboxProtocol(recording: FirebaseFirestore.DocumentData): string
     String(recording.title || "Aufzeichnung"),
     "",
     "Hauptthema",
-    String(recording.shortSummary || recording.summary || ""),
+    getRecordingSummaryText(recording),
     "",
     "Transkript",
     getTranscriptText(recording),

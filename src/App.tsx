@@ -1142,6 +1142,7 @@ function LatestRecordingDetail({
   const [openPanel, setOpenPanel] = useState<"" | "transcript" | "summary" | "translation" | "export">("");
   const [targetLanguage, setTargetLanguage] = useState("en");
   const [isTranslating, setIsTranslating] = useState(false);
+  const summaryText = getRecordingSummaryText(recording);
 
   useEffect(() => {
     setDraftTitle(recording.title);
@@ -1253,7 +1254,7 @@ function LatestRecordingDetail({
           isOpen={openPanel === "summary"}
           onClick={() => setOpenPanel((current) => (current === "summary" ? "" : "summary"))}
           audioControl={
-            recording.shortSummary || recording.summary ? (
+            summaryText ? (
               <ElevenLabsControls
                 audioUrl={recording.elevenLabsSummaryAudioUrl}
                 storageKey={`elevenlabs:${recording.id}:summary`}
@@ -1262,8 +1263,8 @@ function LatestRecordingDetail({
             ) : null
           }
         >
-          {recording.summary || recording.shortSummary ? (
-            <p>{recording.summary || recording.shortSummary}</p>
+          {summaryText ? (
+            <p>{summaryText}</p>
           ) : (
             <div className="lazy-processing-action">
               <p className="muted">Noch keine Zusammenfassung vorhanden.</p>
@@ -1853,15 +1854,16 @@ function SavingProgress({ value }: { value: number | null }) {
 }
 
 function Overview({ recording }: { recording: Recording }) {
+  const summaryText = getRecordingSummaryText(recording);
   return (
     <div className="content-grid">
       <section>
         <h3>Kurzfassung</h3>
-        <p>{recording.shortSummary || "Die KI-Auswertung steht noch aus."}</p>
+        <p>{normalizeDisplayText(recording.shortSummary) || "Die KI-Auswertung steht noch aus."}</p>
       </section>
       <section>
         <h3>Zusammenfassung</h3>
-        <p>{recording.summary || "Noch keine ausführliche Zusammenfassung vorhanden."}</p>
+        <p>{summaryText || "Noch keine ausführliche Zusammenfassung vorhanden."}</p>
       </section>
       <section>
         <h3>Teilnehmer</h3>
@@ -2089,7 +2091,7 @@ function SimpleSummary({
   onCreate: () => void;
   onGenerateSpeech: () => Promise<string>;
 }) {
-  const summary = recording.summary || recording.shortSummary;
+  const summary = getRecordingSummaryText(recording);
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -2255,7 +2257,7 @@ function SimpleTranslation({
   const translationAudioUrl =
     recording.elevenLabsTranslationAudioUrls?.[targetLanguage] ??
     (targetLanguage === "en" ? recording.elevenLabsTranslationAudioUrl : undefined);
-  const hasSummary = Boolean(recording.shortSummary || recording.summary);
+  const hasSummary = Boolean(getRecordingSummaryText(recording));
 
   async function translate() {
     setIsTranslating(true);
@@ -2540,6 +2542,22 @@ function seek(audioRef: RefObject<HTMLAudioElement | null>, seconds: number) {
   audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime + seconds);
 }
 
+function getRecordingSummaryText(recording: Recording): string {
+  return normalizeDisplayText(recording.summary) || normalizeDisplayText(recording.shortSummary);
+}
+
+function normalizeDisplayText(value: unknown): string {
+  if (typeof value === "string") return value === "[object Object]" ? "" : value.trim();
+  if (Array.isArray(value)) return value.map((item) => normalizeDisplayText(item)).filter(Boolean).join("\n");
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const preferred = record.text ?? record.content ?? record.summary ?? record.description;
+    if (preferred !== undefined) return normalizeDisplayText(preferred);
+    return Object.values(record).map((item) => normalizeDisplayText(item)).filter(Boolean).join("\n");
+  }
+  return "";
+}
+
 function buildPlainTextProtocol(recording: Recording): string {
   return [
     recording.title,
@@ -2547,7 +2565,7 @@ function buildPlainTextProtocol(recording: Recording): string {
     `Teilnehmer: ${recording.participants.join(", ") || "Noch nicht erkannt"}`,
     "",
     "Zusammenfassung",
-    recording.summary || recording.shortSummary,
+    getRecordingSummaryText(recording),
     "",
     "Aufgaben",
     ...recording.tasks.map((task) => `- ${task.description} | ${task.owner} | ${task.dueDate} | ${task.status}`),
