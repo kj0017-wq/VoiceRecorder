@@ -1056,32 +1056,12 @@ button {
 }
 
 .audio-mark {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 28px;
-  color: #ff1a1a;
-}
-
-.audio-mark span {
-  width: 4px;
-  border-radius: 999px;
-  background: currentColor;
-  box-shadow: 0 0 14px rgba(255, 26, 26, 0.55);
-}
-
-.audio-mark span:nth-child(1),
-.audio-mark span:nth-child(5) {
-  height: 12px;
-}
-
-.audio-mark span:nth-child(2),
-.audio-mark span:nth-child(4) {
-  height: 22px;
-}
-
-.audio-mark span:nth-child(3) {
-  height: 28px;
+  display: block;
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
+  object-fit: cover;
+  box-shadow: 0 0 28px rgba(255, 26, 26, 0.28);
 }
 
 .record-button {
@@ -1488,8 +1468,13 @@ button {
   justify-content: center;
   width: 100%;
   height: auto;
-  color: #ff1a1a;
   background: transparent;
+}
+
+.auth-icon .audio-mark {
+  width: 76px;
+  height: 76px;
+  border-radius: 18px;
 }
 
 .auth-card .primary-action {

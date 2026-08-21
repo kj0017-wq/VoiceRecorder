@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.svg"],
+      includeAssets: ["favicon.png", "apple-touch-icon.png", "logo-full.jpg"],
       manifest: {
         name: "Gesprächsarchiv KI",
         short_name: "Gespräche",
@@ -18,15 +18,15 @@ export default defineConfig({
         start_url: "/",
         icons: [
           {
-            src: "/pwa-192.svg",
+            src: "/logo-192.png",
             sizes: "192x192",
-            type: "image/svg+xml",
+            type: "image/png",
             purpose: "any maskable"
           },
           {
-            src: "/pwa-512.svg",
+            src: "/logo-512.png",
             sizes: "512x512",
-            type: "image/svg+xml",
+            type: "image/png",
             purpose: "any maskable"
           }
         ]

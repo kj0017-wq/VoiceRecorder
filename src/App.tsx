@@ -1896,15 +1896,7 @@ function formatRecorderDate(value: Date): string {
 }
 
 function AudioMark() {
-  return (
-    <div className="audio-mark" aria-hidden="true">
-      <span />
-      <span />
-      <span />
-      <span />
-      <span />
-    </div>
-  );
+  return <img className="audio-mark" src="/logo-192.png" alt="" aria-hidden="true" />;
 }
 
 function LiveWaveform({ values }: { values: number[] }) {
