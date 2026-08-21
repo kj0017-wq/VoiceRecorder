@@ -1143,6 +1143,11 @@ function LatestRecordingDetail({
   const [targetLanguage, setTargetLanguage] = useState("en");
   const [isTranslating, setIsTranslating] = useState(false);
   const summaryText = getRecordingSummaryText(recording);
+  const translation =
+    recording.translations?.[targetLanguage] ?? (targetLanguage === "en" ? recording.englishTranslation : "");
+  const translationAudioUrl =
+    recording.elevenLabsTranslationAudioUrls?.[targetLanguage] ??
+    (targetLanguage === "en" ? recording.elevenLabsTranslationAudioUrl : undefined);
 
   useEffect(() => {
     setDraftTitle(recording.title);
@@ -1291,6 +1296,23 @@ function LatestRecordingDetail({
           subtitle="In andere Sprache übersetzen"
           isOpen={openPanel === "translation"}
           onClick={() => setOpenPanel((current) => (current === "translation" ? "" : "translation"))}
+          audioControl={
+            <ElevenLabsControls
+              audioUrl={translationAudioUrl}
+              storageKey={`elevenlabs:${recording.id}:summaryTranslation:${targetLanguage}`}
+              onPrepare={
+                translation
+                  ? undefined
+                  : async () => {
+                      if (!summaryText) return "Erst nach der Zusammenfassung verfügbar.";
+                      await translateSummary();
+                      setOpenPanel("translation");
+                      return "Übersetzung wird erstellt. Danach kann sie vorgelesen werden.";
+                    }
+              }
+              onGenerate={() => onGenerateSpeech("translation", targetLanguage)}
+            />
+          }
         >
           <LatestTranslationBlock recording={recording} targetLanguage={targetLanguage} />
         </LatestContentRow>
@@ -1308,10 +1330,6 @@ function LatestRecordingDetail({
             ))}
           </select>
         </div>
-        <button className="latest-setting-row latest-switch-row" onClick={translateSummary} disabled={isTranslating}>
-          <span>{isTranslating ? "Übersetzung läuft" : "Zusammenfassung übersetzen"}</span>
-          <em className="latest-switch">{isTranslating ? <Loader2 className="spin" size={18} aria-hidden="true" /> : null}</em>
-        </button>
       </section>
 
       <section className="latest-panel-group">
@@ -2189,20 +2207,25 @@ function TranscriptTranslation({
             </option>
           ))}
         </select>
-        <button className="secondary-action compact-action" onClick={translate} disabled={isTranslating || !hasTranscript}>
-          {isTranslating ? <Loader2 className="spin" size={18} aria-hidden="true" /> : null}
-          Transkript uebersetzen
-        </button>
       </div>
       <div className="section-heading-row">
         <button className="section-toggle" onClick={() => setIsOpen((current) => !current)} aria-expanded={isOpen}>
           <h3>Transkript uebersetzen</h3>
           <strong>{isOpen ? "Schließen" : "Öffnen"}</strong>
         </button>
-        {translation ? (
+        {hasTranscript ? (
           <ElevenLabsControls
             audioUrl={translationAudioUrl}
             storageKey={`elevenlabs:${recording.id}:transcriptTranslation:${targetLanguage}`}
+            onPrepare={
+              translation
+                ? undefined
+                : async () => {
+                    await translate();
+                    setIsOpen(true);
+                    return "Transkript-Übersetzung wird erstellt. Danach kann sie vorgelesen werden.";
+                  }
+            }
             onGenerate={() => onGenerateSpeech(targetLanguage)}
           />
         ) : null}
@@ -2218,17 +2241,6 @@ function TranscriptTranslation({
               </option>
             ))}
           </select>
-          <button className="secondary-action compact-action" onClick={translate} disabled={isTranslating || !hasTranscript}>
-            {isTranslating ? <Loader2 className="spin" size={18} aria-hidden="true" /> : null}
-            Transkript uebersetzen
-          </button>
-          {translation ? (
-            <ElevenLabsControls
-              audioUrl={translationAudioUrl}
-              storageKey={`elevenlabs:${recording.id}:transcriptTranslation:${targetLanguage}`}
-              onGenerate={() => onGenerateSpeech(targetLanguage)}
-            />
-          ) : null}
         </div>
       </div>
       {isOpen && translation ? (
@@ -2300,20 +2312,25 @@ function SimpleTranslation({
             </option>
           ))}
         </select>
-        <button className="secondary-action compact-action" onClick={translate} disabled={isTranslating || !hasSummary}>
-          {isTranslating ? <Loader2 className="spin" size={18} aria-hidden="true" /> : null}
-          Zusammenfassung uebersetzen
-        </button>
       </div>
       <div className="section-heading-row">
         <button className="section-toggle" onClick={() => setIsOpen((current) => !current)} aria-expanded={isOpen}>
           <h3>Uebersetzung</h3>
           <strong>{isOpen ? "Schließen" : "Öffnen"}</strong>
         </button>
-        {translation ? (
+        {hasSummary ? (
           <ElevenLabsControls
             audioUrl={translationAudioUrl}
             storageKey={`elevenlabs:${recording.id}:summaryTranslation:${targetLanguage}`}
+            onPrepare={
+              translation
+                ? undefined
+                : async () => {
+                    await translate();
+                    setIsOpen(true);
+                    return "Übersetzung wird erstellt. Danach kann sie vorgelesen werden.";
+                  }
+            }
             onGenerate={() => onGenerateSpeech(targetLanguage)}
           />
         ) : null}
@@ -2329,17 +2346,6 @@ function SimpleTranslation({
               </option>
             ))}
           </select>
-          <button className="secondary-action compact-action" onClick={translate} disabled={isTranslating || !hasSummary}>
-            {isTranslating ? <Loader2 className="spin" size={18} aria-hidden="true" /> : null}
-            Zusammenfassung uebersetzen
-          </button>
-          {translation ? (
-            <ElevenLabsControls
-              audioUrl={translationAudioUrl}
-              storageKey={`elevenlabs:${recording.id}:summaryTranslation:${targetLanguage}`}
-              onGenerate={() => onGenerateSpeech(targetLanguage)}
-            />
-          ) : null}
         </div>
       </div>
       {isOpen && translation ? (
