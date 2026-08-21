@@ -251,6 +251,13 @@ button {
   accent-color: #ff3131;
 }
 
+.equalizer-preset-button {
+  justify-content: center;
+  border-color: rgba(255, 49, 49, 0.35);
+  color: #ffffff;
+  background: rgba(255, 49, 49, 0.12);
+}
+
 .allowed-user-row {
   display: grid;
   grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr) 44px;

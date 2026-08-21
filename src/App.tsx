@@ -1120,6 +1120,18 @@ function EqualizerScreen({
     onChange({ ...settings, [key]: value });
   }
 
+  function optimizeForSpeech() {
+    onChange({
+      ...settings,
+      bluetoothLatencyMs: 180,
+      playbackGain: 1.25,
+      amplitudeGain: 2.4,
+      equalizerLow: -2,
+      equalizerMid: 3,
+      equalizerHigh: 4
+    });
+  }
+
   async function save() {
     setIsSaving(true);
     try {
@@ -1139,6 +1151,10 @@ function EqualizerScreen({
         </div>
       </section>
       <section className="equalizer-settings">
+        <button className="secondary-action wide-action equalizer-preset-button" onClick={optimizeForSpeech}>
+          <SlidersHorizontal size={18} aria-hidden="true" />
+          Vortrag optimieren
+        </button>
         <SettingSlider
           label="Bluetooth-Latenz"
           value={settings.bluetoothLatencyMs}
