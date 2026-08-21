@@ -1195,7 +1195,7 @@ function LatestRecordingDetail({
             <span>{formatDuration(recording.duration)}</span>
           </div>
           {recording.audioUrl ? (
-            <audio ref={audioRef} src={recording.audioUrl} crossOrigin="anonymous" className="hidden-audio" />
+            <audio ref={audioRef} src={recording.audioUrl} className="hidden-audio" />
           ) : null}
         </div>
 
@@ -1442,17 +1442,11 @@ function AudioAmplitudeWaveform({
   audioRef: RefObject<HTMLAudioElement | null>;
 }) {
   const [bars, setBars] = useState<number[]>(() => Array(54).fill(18));
-  const [playbackBars, setPlaybackBars] = useState<number[] | null>(null);
   const [playedRatio, setPlayedRatio] = useState(0);
-  const playbackAudioContextRef = useRef<AudioContext | null>(null);
-  const playbackSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
-  const playbackAnalyserRef = useRef<AnalyserNode | null>(null);
-  const playbackFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     let isCancelled = false;
     setPlayedRatio(0);
-    setPlaybackBars(null);
 
     async function analyzeAudio() {
       if (!audioUrl) {
@@ -1487,46 +1481,6 @@ function AudioAmplitudeWaveform({
     if (!player) return undefined;
     let frame = 0;
 
-    const stopPlaybackMeter = () => {
-      if (playbackFrameRef.current) cancelAnimationFrame(playbackFrameRef.current);
-      playbackFrameRef.current = null;
-      playbackSourceRef.current?.disconnect();
-      playbackAnalyserRef.current?.disconnect();
-      playbackAnalyserRef.current = null;
-      setPlaybackBars(null);
-    };
-
-    const startPlaybackMeter = () => {
-      try {
-        const AudioContextCtor =
-          window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-        if (!AudioContextCtor) return;
-        const audioContext = playbackAudioContextRef.current ?? new AudioContextCtor();
-        playbackAudioContextRef.current = audioContext;
-        const source = playbackSourceRef.current ?? audioContext.createMediaElementSource(player);
-        playbackSourceRef.current = source;
-        stopPlaybackMeter();
-        const analyser = audioContext.createAnalyser();
-        playbackAnalyserRef.current = analyser;
-        analyser.fftSize = 1024;
-        analyser.smoothingTimeConstant = 0.45;
-        source.connect(analyser);
-        analyser.connect(audioContext.destination);
-        audioContext.resume().catch(() => undefined);
-        const data = new Uint8Array(analyser.fftSize);
-
-        const meterTick = () => {
-          analyser.getByteTimeDomainData(data);
-          setPlaybackBars(createAmplitudeBarsFromBytes(data, 54));
-          playbackFrameRef.current = requestAnimationFrame(meterTick);
-        };
-
-        meterTick();
-      } catch {
-        stopPlaybackMeter();
-      }
-    };
-
     const updatePlaybackPosition = () => {
       const duration = Number.isFinite(player.duration) && player.duration > 0 ? player.duration : 0;
       setPlayedRatio(duration ? Math.min(1, Math.max(0, player.currentTime / duration)) : 0);
@@ -1539,17 +1493,14 @@ function AudioAmplitudeWaveform({
 
     const handlePlay = () => {
       cancelAnimationFrame(frame);
-      startPlaybackMeter();
       tick();
     };
     const handlePause = () => {
       cancelAnimationFrame(frame);
-      stopPlaybackMeter();
       updatePlaybackPosition();
     };
     const handleEnded = () => {
       cancelAnimationFrame(frame);
-      stopPlaybackMeter();
       setPlayedRatio(0);
     };
 
@@ -1562,10 +1513,6 @@ function AudioAmplitudeWaveform({
 
     return () => {
       cancelAnimationFrame(frame);
-      stopPlaybackMeter();
-      playbackAudioContextRef.current?.close().catch(() => undefined);
-      playbackAudioContextRef.current = null;
-      playbackSourceRef.current = null;
       player.removeEventListener("loadedmetadata", updatePlaybackPosition);
       player.removeEventListener("timeupdate", updatePlaybackPosition);
       player.removeEventListener("play", handlePlay);
@@ -1574,12 +1521,11 @@ function AudioAmplitudeWaveform({
     };
   }, [audioRef, audioUrl]);
 
-  const visibleBars = playbackBars ?? bars;
-  const activeBar = Math.floor(playedRatio * visibleBars.length);
+  const activeBar = Math.floor(playedRatio * bars.length);
 
   return (
     <div className="latest-waveform" aria-hidden="true">
-      {visibleBars.map((height, index) => (
+      {bars.map((height, index) => (
         <span
           key={`${height}-${index}`}
           className={index <= activeBar && playedRatio > 0 ? "is-played" : ""}
@@ -1608,28 +1554,6 @@ function createAmplitudeBars(buffer: AudioBuffer, barCount: number) {
 
   return rawBars.map((value) => {
     const normalized = Math.pow(value / peak, 0.55);
-    return Math.round(8 + normalized * 56);
-  });
-}
-
-function createAmplitudeBarsFromBytes(data: Uint8Array, barCount: number) {
-  const samplesPerBar = Math.max(1, Math.floor(data.length / barCount));
-  const rawBars = Array.from({ length: barCount }, (_, barIndex) => {
-    const start = barIndex * samplesPerBar;
-    const end = Math.min(data.length, start + samplesPerBar);
-    let sumSquares = 0;
-
-    for (let index = start; index < end; index += 1) {
-      const normalized = (data[index] - 128) / 128;
-      sumSquares += normalized * normalized;
-    }
-
-    return Math.sqrt(sumSquares / Math.max(1, end - start));
-  });
-  const peak = Math.max(...rawBars, 0.006);
-
-  return rawBars.map((value) => {
-    const normalized = Math.min(1, Math.pow(value / peak, 0.42) * 1.2);
     return Math.round(8 + normalized * 56);
   });
 }
@@ -2026,7 +1950,7 @@ function AudioTools({
         </p>
       </div>
       {recording.audioUrl ? (
-        <audio ref={audioRef} src={recording.audioUrl} crossOrigin="anonymous" className="hidden-audio" />
+        <audio ref={audioRef} src={recording.audioUrl} className="hidden-audio" />
       ) : (
         <EmptyLine text="Audiodatei ist noch nicht verfügbar." />
       )}
