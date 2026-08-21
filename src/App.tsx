@@ -29,6 +29,7 @@ import {
   Search,
   Settings,
   Share2,
+  SlidersHorizontal,
   Square,
   Target,
   Trash2,
@@ -132,7 +133,7 @@ const europeanLanguages = [
   { code: "tr", label: "Tuerkisch" }
 ];
 const tabs = ["Übersicht", "Aufgaben", "Beschlüsse", "Transkript", "Audio"] as const;
-type AppMode = "recording" | "latest" | "archive";
+type AppMode = "recording" | "latest" | "archive" | "equalizer";
 
 export function App() {
   const recorder = useRecorder();
@@ -423,6 +424,18 @@ export function App() {
     setNotice("Übersetzung ist fertig.");
   }
 
+  async function handleSaveAudioSettings(settings: typeof defaultVoiceSettings) {
+    setVoiceSettings(settings);
+    setNotice("Speichere Equalizer.");
+    try {
+      const savedSettings = await saveAppSettings(settings);
+      setVoiceSettings(savedSettings);
+      setNotice("Equalizer gespeichert.");
+    } catch {
+      setNotice("Equalizer konnte nicht gespeichert werden.");
+    }
+  }
+
   async function handleLogout() {
     if (!firebase.auth) return;
     await signOut(firebase.auth);
@@ -450,7 +463,7 @@ export function App() {
 
   return (
     <main
-      className={`app-shell ${mode === "recording" && !settingsOpen ? "recorder-app-shell" : ""} ${mode !== "recording" && !settingsOpen ? "latest-app-shell" : ""} ${batteryRecording ? "battery-mode" : ""} ${batteryDimmed ? "battery-dimmed" : ""}`}
+      className={`app-shell ${mode === "recording" && !settingsOpen ? "recorder-app-shell" : ""} ${mode !== "recording" && !settingsOpen ? "latest-app-shell" : ""} ${mode === "equalizer" && !settingsOpen ? "equalizer-app-shell" : ""} ${batteryRecording ? "battery-mode" : ""} ${batteryDimmed ? "battery-dimmed" : ""}`}
       onClick={revealBatteryMode}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
@@ -464,7 +477,7 @@ export function App() {
           ) : null}
           <div>
             <p className="eyebrow">Voice Recorder</p>
-            <h1>{settingsOpen ? "Einstellungen" : mode === "latest" ? "Letzte Aufnahme" : "Archiv"}</h1>
+            <h1>{settingsOpen ? "Einstellungen" : mode === "latest" ? "Letzte Aufnahme" : mode === "archive" ? "Archiv" : "Equalizer"}</h1>
           </div>
           <div className="topbar-actions">
             <button className="user-pill" onClick={handleLogout}>
@@ -622,7 +635,7 @@ export function App() {
                 )}
               </div>
             </section>
-          ) : (
+          ) : mode === "archive" ? (
             <section className="detail-panel archive-list-panel">
               {filtered.length ? (
                 <div className="recording-list archive-only-list">
@@ -644,6 +657,8 @@ export function App() {
               </div>
               )}
             </section>
+          ) : (
+            <EqualizerScreen settings={voiceSettings} onChange={setVoiceSettings} onSave={handleSaveAudioSettings} />
           )}
         </section>
       ) : null}
@@ -679,6 +694,16 @@ export function App() {
         >
           <Archive size={20} aria-hidden="true" />
           Archiv
+        </button>
+        <button
+          className={mode === "equalizer" && !settingsOpen ? "is-active" : ""}
+          onClick={() => {
+            setSettingsOpen(false);
+            setMode("equalizer");
+          }}
+        >
+          <SlidersHorizontal size={20} aria-hidden="true" />
+          Equalizer
         </button>
         {accessState?.isAdmin ? (
           <button className={settingsOpen ? "is-active" : ""} onClick={() => setSettingsOpen((current) => !current)}>
@@ -970,54 +995,6 @@ function SettingsPanel({
               step={0.05}
               onChange={(value) => update("speed", value)}
             />
-            <section className="equalizer-settings">
-              <h3>Equalizer</h3>
-              <SettingSlider
-                label="Bluetooth-Latenz"
-                value={settings.bluetoothLatencyMs}
-                min={0}
-                max={500}
-                step={10}
-                unit=" ms"
-                onChange={(value) => update("bluetoothLatencyMs", value)}
-              />
-              <SettingSlider
-                label="Lautstaerke"
-                value={settings.playbackGain}
-                min={0.5}
-                max={2}
-                step={0.05}
-                unit="x"
-                onChange={(value) => update("playbackGain", value)}
-              />
-              <SettingSlider
-                label="Bass"
-                value={settings.equalizerLow}
-                min={-12}
-                max={12}
-                step={1}
-                unit=" dB"
-                onChange={(value) => update("equalizerLow", value)}
-              />
-              <SettingSlider
-                label="Mitten"
-                value={settings.equalizerMid}
-                min={-12}
-                max={12}
-                step={1}
-                unit=" dB"
-                onChange={(value) => update("equalizerMid", value)}
-              />
-              <SettingSlider
-                label="Hoehen"
-                value={settings.equalizerHigh}
-                min={-12}
-                max={12}
-                step={1}
-                unit=" dB"
-                onChange={(value) => update("equalizerHigh", value)}
-              />
-            </section>
           </div>
         ) : null}
       </section>
@@ -1115,6 +1092,94 @@ function SettingSlider({
         onChange={(event) => onChange(Number(event.target.value))}
       />
     </label>
+  );
+}
+
+function EqualizerScreen({
+  settings,
+  onChange,
+  onSave
+}: {
+  settings: typeof defaultVoiceSettings;
+  onChange: (settings: typeof defaultVoiceSettings) => void;
+  onSave: (settings: typeof defaultVoiceSettings) => Promise<void>;
+}) {
+  const [isSaving, setIsSaving] = useState(false);
+
+  function update<K extends keyof typeof defaultVoiceSettings>(key: K, value: (typeof defaultVoiceSettings)[K]) {
+    onChange({ ...settings, [key]: value });
+  }
+
+  async function save() {
+    setIsSaving(true);
+    try {
+      await onSave(settings);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <section className="equalizer-screen">
+      <section className="equalizer-hero">
+        <SlidersHorizontal size={28} aria-hidden="true" />
+        <div>
+          <p className="eyebrow">Audio</p>
+          <h2>Equalizer</h2>
+        </div>
+      </section>
+      <section className="equalizer-settings">
+        <SettingSlider
+          label="Bluetooth-Latenz"
+          value={settings.bluetoothLatencyMs}
+          min={0}
+          max={500}
+          step={10}
+          unit=" ms"
+          onChange={(value) => update("bluetoothLatencyMs", value)}
+        />
+        <SettingSlider
+          label="Lautstaerke"
+          value={settings.playbackGain}
+          min={0.5}
+          max={2}
+          step={0.05}
+          unit="x"
+          onChange={(value) => update("playbackGain", value)}
+        />
+        <SettingSlider
+          label="Bass"
+          value={settings.equalizerLow}
+          min={-12}
+          max={12}
+          step={1}
+          unit=" dB"
+          onChange={(value) => update("equalizerLow", value)}
+        />
+        <SettingSlider
+          label="Mitten"
+          value={settings.equalizerMid}
+          min={-12}
+          max={12}
+          step={1}
+          unit=" dB"
+          onChange={(value) => update("equalizerMid", value)}
+        />
+        <SettingSlider
+          label="Hoehen"
+          value={settings.equalizerHigh}
+          min={-12}
+          max={12}
+          step={1}
+          unit=" dB"
+          onChange={(value) => update("equalizerHigh", value)}
+        />
+        <button className="primary-action wide-action" onClick={save} disabled={isSaving}>
+          {isSaving ? <Loader2 className="spin" size={18} aria-hidden="true" /> : null}
+          Speichern
+        </button>
+      </section>
+    </section>
   );
 }
 
