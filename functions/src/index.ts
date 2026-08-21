@@ -4,6 +4,7 @@ import { getStorage } from "firebase-admin/storage";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import OpenAI from "openai";
+import { createHash } from "node:crypto";
 
 initializeApp();
 
@@ -149,7 +150,11 @@ export const processRecording = onCall({ secrets: [openaiApiKey] }, async (reque
       await recordingRef.update({
         transcript: transcript.segments,
         language: transcript.language,
-        status: mode === "transcript" ? "ready" : "analyzing"
+        status: mode === "transcript" ? "ready" : "analyzing",
+        elevenLabsTranscriptAudioUrl: FieldValue.delete(),
+        elevenLabsTranscriptAudioCacheKey: FieldValue.delete(),
+        elevenLabsTranscriptTranslationAudioUrls: FieldValue.delete(),
+        elevenLabsTranscriptTranslationAudioCacheKeys: FieldValue.delete()
       });
     }
 
@@ -167,7 +172,12 @@ export const processRecording = onCall({ secrets: [openaiApiKey] }, async (reque
     const analysis = await analyzeTranscript(transcriptText, appSettings.summaryModel);
     await recordingRef.update({
       ...analysis,
-      status: "done"
+      status: "done",
+      elevenLabsSummaryAudioUrl: FieldValue.delete(),
+      elevenLabsSummaryAudioCacheKey: FieldValue.delete(),
+      elevenLabsTranslationAudioUrls: FieldValue.delete(),
+      elevenLabsTranslationAudioCacheKeys: FieldValue.delete(),
+      elevenLabsTranslationAudioUrl: FieldValue.delete()
     });
 
     return { ok: true };
@@ -214,6 +224,15 @@ export const generateSpeech = onCall({ secrets: [elevenLabsApiKey] }, async (req
   }
 
   try {
+    const audioField = getElevenLabsAudioField(kind, targetLanguage);
+    const cacheField = getElevenLabsCacheField(kind, targetLanguage);
+    const cacheKey = createSpeechCacheKey(text, kind, targetLanguage, voiceSettings, recording);
+    const cachedAudioUrl = getNestedRecordingValue(recording, audioField);
+    const cachedKey = getNestedRecordingValue(recording, cacheField);
+    if (cachedAudioUrl && cachedKey === cacheKey) {
+      return { audioUrl: cachedAudioUrl };
+    }
+
     const audioBuffer =
       kind === "transcript" && hasMultipleSpeakers(recording)
         ? await createDialogAudio(recording, voiceSettings)
@@ -238,7 +257,8 @@ export const generateSpeech = onCall({ secrets: [elevenLabsApiKey] }, async (req
       storagePath
     )}?alt=media&token=${token}`;
     await recordingRef.update({
-      [getElevenLabsAudioField(kind, targetLanguage)]: audioUrl
+      [audioField]: audioUrl,
+      [cacheField]: cacheKey
     });
 
     return { audioUrl };
@@ -309,10 +329,15 @@ export const translateRecording = onCall({ secrets: [openaiApiKey] }, async (req
     source === "transcript"
       ? {
           [`transcriptTranslations.${targetLanguage}`]: translation,
-          [`transcriptTranslationSegments.${targetLanguage}`]: transcriptSegments
+          [`transcriptTranslationSegments.${targetLanguage}`]: transcriptSegments,
+          [`elevenLabsTranscriptTranslationAudioUrls.${targetLanguage}`]: FieldValue.delete(),
+          [`elevenLabsTranscriptTranslationAudioCacheKeys.${targetLanguage}`]: FieldValue.delete()
         }
       : {
           [`translations.${targetLanguage}`]: translation,
+          [`elevenLabsTranslationAudioUrls.${targetLanguage}`]: FieldValue.delete(),
+          [`elevenLabsTranslationAudioCacheKeys.${targetLanguage}`]: FieldValue.delete(),
+          ...(targetLanguage === "en" ? { elevenLabsTranslationAudioUrl: FieldValue.delete() } : {}),
           ...(targetLanguage === "en" ? { englishTranslation: translation } : {})
         }
   );
@@ -419,6 +444,69 @@ function getElevenLabsAudioField(
   if (kind === "translation") return `elevenLabsTranslationAudioUrls.${targetLanguage}`;
   if (kind === "transcriptTranslation") return `elevenLabsTranscriptTranslationAudioUrls.${targetLanguage}`;
   return "elevenLabsTranscriptAudioUrl";
+}
+
+function getElevenLabsCacheField(
+  kind: "summary" | "transcript" | "translation" | "transcriptTranslation",
+  targetLanguage: string
+): string {
+  if (kind === "summary") return "elevenLabsSummaryAudioCacheKey";
+  if (kind === "translation") return `elevenLabsTranslationAudioCacheKeys.${targetLanguage}`;
+  if (kind === "transcriptTranslation") return `elevenLabsTranscriptTranslationAudioCacheKeys.${targetLanguage}`;
+  return "elevenLabsTranscriptAudioCacheKey";
+}
+
+function createSpeechCacheKey(
+  text: string,
+  kind: "summary" | "transcript" | "translation" | "transcriptTranslation",
+  targetLanguage: string,
+  voiceSettings: ReturnType<typeof normalizeVoiceSettings>,
+  recording: FirebaseFirestore.DocumentData | undefined
+): string {
+  const speakerSignature =
+    kind === "transcript" && hasMultipleSpeakers(recording)
+      ? getDialogSpeakerSignature(recording, voiceSettings)
+      : "";
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        text,
+        kind,
+        targetLanguage,
+        voiceId: voiceSettings.voiceId,
+        stability: voiceSettings.stability,
+        similarityBoost: voiceSettings.similarityBoost,
+        style: voiceSettings.style,
+        speed: voiceSettings.speed,
+        speakerSignature
+      })
+    )
+    .digest("hex");
+}
+
+function getNestedRecordingValue(recording: FirebaseFirestore.DocumentData | undefined, path: string): string {
+  if (!recording) return "";
+  const value = path.split(".").reduce<unknown>((currentValue, key) => {
+    if (!currentValue || typeof currentValue !== "object") return undefined;
+    return (currentValue as Record<string, unknown>)[key];
+  }, recording) as string || "";
+  return typeof value === "string" ? value : "";
+}
+
+function getDialogSpeakerSignature(
+  recording: FirebaseFirestore.DocumentData | undefined,
+  voiceSettings: ReturnType<typeof normalizeVoiceSettings>
+): string {
+  const transcript = Array.isArray(recording?.transcript) ? recording.transcript : [];
+  const speakers = Array.from(
+    new Set(transcript.map((segment) => String(segment.speaker ?? "Sprecher 1").trim()).filter(Boolean))
+  );
+  return JSON.stringify(
+    speakers.map((speaker, index) => ({
+      speaker,
+      voiceId: getDialogVoiceId(speaker, index, voiceSettings)
+    }))
+  );
 }
 
 function getAudioFileName(contentType: string): string {

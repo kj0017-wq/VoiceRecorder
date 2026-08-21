@@ -2353,7 +2353,7 @@ function SimpleTranslation({
 
 function ElevenLabsControls({
   audioUrl,
-  storageKey,
+  storageKey: _storageKey,
   onPrepare,
   onGenerate
 }: {
@@ -2363,17 +2363,14 @@ function ElevenLabsControls({
   onGenerate: () => Promise<string>;
 }) {
   const [isGenerating, setIsGenerating] = useState(false);
-  const [localAudioUrl, setLocalAudioUrl] = useState(() => audioUrl ?? localStorage.getItem(storageKey) ?? "");
+  const [localAudioUrl, setLocalAudioUrl] = useState(() => audioUrl ?? "");
   const [playbackHint, setPlaybackHint] = useState("");
   const elevenAudioRef = useRef<HTMLAudioElement>(null);
   const readyAudioUrl = localAudioUrl || audioUrl || "";
 
   useEffect(() => {
-    if (audioUrl) {
-      setLocalAudioUrl(audioUrl);
-      localStorage.setItem(storageKey, audioUrl);
-    }
-  }, [audioUrl, storageKey]);
+    setLocalAudioUrl(audioUrl ?? "");
+  }, [audioUrl]);
 
   async function generate() {
     setIsGenerating(true);
@@ -2389,7 +2386,6 @@ function ElevenLabsControls({
         throw new Error("Keine ElevenLabs-Audiodatei erhalten.");
       }
       setLocalAudioUrl(generatedUrl);
-      localStorage.setItem(storageKey, generatedUrl);
       setPlaybackHint("Audio ist fertig. Jetzt Vorlesen antippen.");
     } catch (error) {
       setPlaybackHint(error instanceof Error ? error.message : "Audio konnte nicht erstellt werden.");
