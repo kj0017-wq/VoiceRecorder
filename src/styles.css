@@ -188,6 +188,20 @@ button {
   color: #101827;
 }
 
+.equalizer-settings {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.equalizer-settings h3 {
+  margin: 0;
+  color: #101827;
+}
+
 .allowed-user-row {
   display: grid;
   grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr) 44px;

@@ -76,10 +76,20 @@ const defaultVoiceSettings = {
   similarityBoost: 0.75,
   style: 0,
   speed: 1,
+  bluetoothLatencyMs: 180,
+  playbackGain: 1,
+  equalizerLow: 0,
+  equalizerMid: 0,
+  equalizerHigh: 0,
   voicePreset: "male",
   summaryModel: "gpt-4.1-mini",
   languageVoices: {} as Record<string, string>
 };
+
+type PlaybackSettings = Pick<
+  typeof defaultVoiceSettings,
+  "bluetoothLatencyMs" | "playbackGain" | "equalizerLow" | "equalizerMid" | "equalizerHigh"
+>;
 
 const fallbackVoices: ElevenLabsVoice[] = [
   { id: "JBFqnCBsd6RMkjVDRZzb", name: "Standard maennlich" },
@@ -595,6 +605,7 @@ export function App() {
                   <LatestRecordingDetail
                     key={selected.id}
                     recording={selected}
+                    playbackSettings={voiceSettings}
                     onBack={() => setMode("recording")}
                     onDelete={() => handleDelete(selected)}
                     onRename={(title) => handleRename(selected, title)}
@@ -959,6 +970,54 @@ function SettingsPanel({
               step={0.05}
               onChange={(value) => update("speed", value)}
             />
+            <section className="equalizer-settings">
+              <h3>Equalizer</h3>
+              <SettingSlider
+                label="Bluetooth-Latenz"
+                value={settings.bluetoothLatencyMs}
+                min={0}
+                max={500}
+                step={10}
+                unit=" ms"
+                onChange={(value) => update("bluetoothLatencyMs", value)}
+              />
+              <SettingSlider
+                label="Lautstaerke"
+                value={settings.playbackGain}
+                min={0.5}
+                max={2}
+                step={0.05}
+                unit="x"
+                onChange={(value) => update("playbackGain", value)}
+              />
+              <SettingSlider
+                label="Bass"
+                value={settings.equalizerLow}
+                min={-12}
+                max={12}
+                step={1}
+                unit=" dB"
+                onChange={(value) => update("equalizerLow", value)}
+              />
+              <SettingSlider
+                label="Mitten"
+                value={settings.equalizerMid}
+                min={-12}
+                max={12}
+                step={1}
+                unit=" dB"
+                onChange={(value) => update("equalizerMid", value)}
+              />
+              <SettingSlider
+                label="Hoehen"
+                value={settings.equalizerHigh}
+                min={-12}
+                max={12}
+                step={1}
+                unit=" dB"
+                onChange={(value) => update("equalizerHigh", value)}
+              />
+            </section>
           </div>
         ) : null}
       </section>
@@ -1029,6 +1088,7 @@ function SettingSlider({
   min,
   max,
   step,
+  unit = "",
   onChange
 }: {
   label: string;
@@ -1036,13 +1096,15 @@ function SettingSlider({
   min: number;
   max: number;
   step: number;
+  unit?: string;
   onChange: (value: number) => void;
 }) {
+  const displayValue = step >= 1 ? value.toFixed(0) : value.toFixed(2);
   return (
     <label className="setting-slider">
       <span>
         {label}
-        <strong>{value.toFixed(2)}</strong>
+        <strong>{displayValue}{unit}</strong>
       </span>
       <input
         type="range"
@@ -1119,6 +1181,7 @@ async function fetchElevenLabsVoices(): Promise<ElevenLabsVoice[]> {
 
 function LatestRecordingDetail({
   recording,
+  playbackSettings,
   onDelete,
   onRename,
   onRetry,
@@ -1126,6 +1189,7 @@ function LatestRecordingDetail({
   onTranslate
 }: {
   recording: Recording;
+  playbackSettings: PlaybackSettings;
   onBack: () => void;
   onDelete: () => void;
   onRename: (title: string) => Promise<void>;
@@ -1194,7 +1258,14 @@ function LatestRecordingDetail({
         </div>
 
         <div className="latest-audio-stage">
-          {recording.audioUrl ? <RoundAudioToggle audioRef={audioRef} audioUrl={recording.audioUrl} label="Aufzeichnung" /> : null}
+          {recording.audioUrl ? (
+            <RoundAudioToggle
+              audioRef={audioRef}
+              audioUrl={recording.audioUrl}
+              label="Aufzeichnung"
+              playbackSettings={playbackSettings}
+            />
+          ) : null}
           <AudioAmplitudeWaveform audioUrl={recording.audioUrl} audioRef={audioRef} />
           <div className="latest-audio-times">
             <span>00:00</span>
@@ -1244,6 +1315,7 @@ function LatestRecordingDetail({
             <ElevenLabsControls
               audioUrl={recording.elevenLabsTranscriptAudioUrl}
               storageKey={`elevenlabs:${recording.id}:transcript`}
+              playbackSettings={playbackSettings}
               onPrepare={
                 recording.transcript.length
                   ? undefined
@@ -1269,6 +1341,7 @@ function LatestRecordingDetail({
             <ElevenLabsControls
               audioUrl={recording.elevenLabsSummaryAudioUrl}
               storageKey={`elevenlabs:${recording.id}:summary`}
+              playbackSettings={playbackSettings}
               onPrepare={
                 summaryText
                   ? undefined
@@ -1300,6 +1373,7 @@ function LatestRecordingDetail({
             <ElevenLabsControls
               audioUrl={translationAudioUrl}
               storageKey={`elevenlabs:${recording.id}:summaryTranslation:${targetLanguage}`}
+              playbackSettings={playbackSettings}
               onPrepare={
                 translation
                   ? undefined
@@ -2364,11 +2438,13 @@ function SimpleTranslation({
 function ElevenLabsControls({
   audioUrl,
   storageKey: _storageKey,
+  playbackSettings,
   onPrepare,
   onGenerate
 }: {
   audioUrl?: string;
   storageKey: string;
+  playbackSettings?: PlaybackSettings;
   onPrepare?: () => Promise<string | void>;
   onGenerate: () => Promise<string>;
 }) {
@@ -2399,6 +2475,7 @@ function ElevenLabsControls({
       const player = elevenAudioRef.current;
       if (player) {
         player.src = generatedUrl;
+        player.volume = clampPlaybackVolume(playbackSettings?.playbackGain ?? 1);
         await player.play();
         setPlaybackHint("");
       } else {
@@ -2415,7 +2492,12 @@ function ElevenLabsControls({
     <div className="elevenlabs-controls">
       {readyAudioUrl ? (
         <div className="section-controls">
-          <RoundAudioToggle audioRef={elevenAudioRef} audioUrl={readyAudioUrl} label="Vorlesen" />
+          <RoundAudioToggle
+            audioRef={elevenAudioRef}
+            audioUrl={readyAudioUrl}
+            label="Vorlesen"
+            playbackSettings={playbackSettings}
+          />
         </div>
       ) : null}
       {!readyAudioUrl ? (
@@ -2443,17 +2525,21 @@ function ElevenLabsControls({
 function RoundAudioToggle({
   audioRef,
   audioUrl,
-  label
+  label,
+  playbackSettings
 }: {
   audioRef: RefObject<HTMLAudioElement | null>;
   audioUrl: string;
   label: string;
+  playbackSettings?: PlaybackSettings;
 }) {
   const [isPlaying, setIsPlaying] = useState(false);
+  const playbackGain = playbackSettings?.playbackGain ?? 1;
 
   useEffect(() => {
     const player = audioRef.current;
     if (!player) return undefined;
+    player.volume = clampPlaybackVolume(playbackGain);
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
     const handleEnded = () => setIsPlaying(false);
@@ -2465,7 +2551,7 @@ function RoundAudioToggle({
       player.removeEventListener("pause", handlePause);
       player.removeEventListener("ended", handleEnded);
     };
-  }, [audioRef]);
+  }, [audioRef, playbackGain]);
 
   function toggle() {
     const player = audioRef.current;
@@ -2477,6 +2563,7 @@ function RoundAudioToggle({
       return;
     }
     player.src = audioUrl;
+    player.volume = clampPlaybackVolume(playbackGain);
     player.play().catch(() => setIsPlaying(false));
   }
 
@@ -2574,6 +2661,11 @@ function stripSpeakerLabels(text: string): string {
 function seek(audioRef: RefObject<HTMLAudioElement | null>, seconds: number) {
   if (!audioRef.current) return;
   audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime + seconds);
+}
+
+function clampPlaybackVolume(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(1, Math.max(0, value));
 }
 
 function getRecordingSummaryText(recording: Recording): string {

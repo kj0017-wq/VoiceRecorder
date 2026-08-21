@@ -632,6 +632,11 @@ function normalizeAppSettings(value: unknown) {
     similarityBoost: clampNumber(input.similarityBoost, 0, 1, 0.75),
     style: clampNumber(input.style, 0, 1, 0),
     speed: clampNumber(input.speed, 0.7, 1.2, 1),
+    bluetoothLatencyMs: clampNumber(input.bluetoothLatencyMs, 0, 500, 180),
+    playbackGain: clampNumber(input.playbackGain, 0.5, 2, 1),
+    equalizerLow: clampNumber(input.equalizerLow, -12, 12, 0),
+    equalizerMid: clampNumber(input.equalizerMid, -12, 12, 0),
+    equalizerHigh: clampNumber(input.equalizerHigh, -12, 12, 0),
     summaryModel: normalizeSummaryModel(input.summaryModel),
     languageVoices: normalizeLanguageVoices(input.languageVoices)
   };
