@@ -170,6 +170,12 @@ export function App() {
     [filtered, latestRecording, recordings, selectedId]
   );
 
+  function openRecordingInPlayback(recording: Recording) {
+    setSelectedId(recording.id);
+    setOpenClusterId(recording.id);
+    setMode("latest");
+  }
+
   useEffect(() => {
     if (!notice) return undefined;
     const timer = window.setTimeout(() => setNotice(""), 4200);
@@ -319,10 +325,7 @@ export function App() {
     if (settingsOpen) return;
     if (mode === "archive") {
       setMode("latest");
-      if (latestRecording) {
-        setSelectedId(latestRecording.id);
-        setOpenClusterId(latestRecording.id);
-      }
+      if (selected) openRecordingInPlayback(selected);
       return;
     }
     if (mode === "latest") setMode("recording");
@@ -500,8 +503,7 @@ export function App() {
               onClick={() => {
                 setMode("latest");
                 if (latestRecording) {
-                  setSelectedId(latestRecording.id);
-                  setOpenClusterId(latestRecording.id);
+                  openRecordingInPlayback(latestRecording);
                 }
               }}
             >
@@ -611,6 +613,7 @@ export function App() {
               <div className="cluster-list">
                 {selected ? (
                   <LatestRecordingDetail
+                    key={selected.id}
                     recording={selected}
                     onBack={() => setMode("recording")}
                     onDelete={() => handleDelete(selected)}
@@ -637,11 +640,7 @@ export function App() {
                       key={recording.id}
                       recording={recording}
                       isSelected={selected?.id === recording.id}
-                      onOpen={() => {
-                        setSelectedId(recording.id);
-                        setOpenClusterId(recording.id);
-                        setMode("latest");
-                      }}
+                      onOpen={() => openRecordingInPlayback(recording)}
                       onDelete={() => handleDelete(recording)}
                     />
                   ))}
@@ -674,10 +673,7 @@ export function App() {
           onClick={() => {
             setSettingsOpen(false);
             setMode("latest");
-            if (latestRecording) {
-              setSelectedId(latestRecording.id);
-              setOpenClusterId(latestRecording.id);
-            }
+            if (!selectedId && latestRecording) openRecordingInPlayback(latestRecording);
           }}
         >
           <FileAudio size={20} aria-hidden="true" />
