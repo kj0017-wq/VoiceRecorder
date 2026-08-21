@@ -422,6 +422,8 @@ async function transcribeFromUrl(audioUrl: string) {
     file,
     model: "gpt-4o-transcribe-diarize",
     response_format: "diarized_json",
+    language: "de",
+    prompt: "Das Audio ist deutsch. Transkribiere wortgetreu auf Deutsch. Nicht ins Englische übersetzen.",
     chunking_strategy: "auto"
   } as unknown as Parameters<ReturnType<typeof getOpenAI>["audio"]["transcriptions"]["create"]>[0])) as unknown as Record<
     string,
