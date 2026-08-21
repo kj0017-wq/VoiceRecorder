@@ -10,7 +10,7 @@ export interface RecorderResult {
   waveform: number[];
   audioBlob: Blob | null;
   error: string;
-  start: (keepScreenAwake?: boolean) => Promise<void>;
+  start: (keepScreenAwake?: boolean, monitorOutput?: boolean) => Promise<void>;
   pause: () => void;
   resume: () => void;
   stop: () => void;
@@ -61,7 +61,7 @@ export function useRecorder(): RecorderResult {
     audioContextRef.current = null;
   }, []);
 
-  const startVolumeMeter = useCallback((stream: MediaStream) => {
+  const startVolumeMeter = useCallback((stream: MediaStream, monitorOutput = false) => {
     const audioContext = new AudioContext();
     audioContextRef.current = audioContext;
     const source = audioContext.createMediaStreamSource(stream);
@@ -70,6 +70,13 @@ export function useRecorder(): RecorderResult {
     analyser.smoothingTimeConstant = 0.82;
     const data = new Uint8Array(analyser.fftSize);
     source.connect(analyser);
+    if (monitorOutput) {
+      const monitorGain = audioContext.createGain();
+      monitorGain.gain.value = 0.85;
+      source.connect(monitorGain);
+      monitorGain.connect(audioContext.destination);
+      audioContext.resume().catch(() => undefined);
+    }
 
     const tick = () => {
       analyser.getByteTimeDomainData(data);
@@ -94,7 +101,7 @@ export function useRecorder(): RecorderResult {
     tick();
   }, []);
 
-  const start = useCallback(async (keepScreenAwake = true) => {
+  const start = useCallback(async (keepScreenAwake = true, monitorOutput = false) => {
     try {
       keepScreenAwakeRef.current = keepScreenAwake;
       setError("");
@@ -125,7 +132,7 @@ export function useRecorder(): RecorderResult {
       elapsedBeforePauseRef.current = 0;
       setElapsedSeconds(0);
       setState("recording");
-      startVolumeMeter(stream);
+      startVolumeMeter(stream, monitorOutput);
     } catch {
       setError("Mikrofonzugriff wurde verweigert oder ist nicht verfügbar.");
       setState("error");

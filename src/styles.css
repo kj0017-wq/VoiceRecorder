@@ -1211,6 +1211,50 @@ button {
   }
 }
 
+.monitor-output-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(100%, 380px);
+  justify-self: center;
+  padding: 9px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.045);
+  text-align: left;
+}
+
+.monitor-output-toggle input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  accent-color: #ff1a1a;
+}
+
+.monitor-output-toggle span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.monitor-output-toggle strong {
+  color: #ffffff;
+  font-size: 0.84rem;
+  font-weight: 850;
+  line-height: 1.1;
+}
+
+.monitor-output-toggle small {
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 0.72rem;
+  font-weight: 680;
+  line-height: 1.15;
+}
+
+.monitor-output-toggle input:disabled + span {
+  opacity: 0.55;
+}
+
 .recording-meta-strip {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(132px, 0.85fr);

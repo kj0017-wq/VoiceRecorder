@@ -143,6 +143,7 @@ export function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [savingProgress, setSavingProgress] = useState<number | null>(null);
   const [autoSaveAfterStop, setAutoSaveAfterStop] = useState(false);
+  const [monitorOutput, setMonitorOutput] = useState(() => localStorage.getItem("voice-monitor-output") === "yes");
   const [recordingStartedAt, setRecordingStartedAt] = useState<Date>(() => new Date());
   const [notice, setNotice] = useState("");
   const [batteryDimmed, setBatteryDimmed] = useState(false);
@@ -179,6 +180,10 @@ export function App() {
   useEffect(() => {
     localStorage.setItem("voice-elevenlabs-settings", JSON.stringify(voiceSettings));
   }, [voiceSettings]);
+
+  useEffect(() => {
+    localStorage.setItem("voice-monitor-output", monitorOutput ? "yes" : "no");
+  }, [monitorOutput]);
 
   const batteryRecording = false;
 
@@ -288,7 +293,7 @@ export function App() {
       ...current,
       title: current.title.trim() ? current.title : createFallbackTitle(startedAt)
     }));
-    await recorder.start(true);
+    await recorder.start(true, monitorOutput);
   }
 
   function goToNextPage() {
@@ -529,6 +534,19 @@ export function App() {
             </span>
             {isSaving ? <SavingProgress value={savingProgress} /> : null}
           </div>
+
+          <label className="monitor-output-toggle">
+            <input
+              type="checkbox"
+              checked={monitorOutput}
+              onChange={(event) => setMonitorOutput(event.target.checked)}
+              disabled={recorder.state === "recording" || recorder.state === "paused" || isSaving}
+            />
+            <span>
+              <strong>Mikrofon auf Lautsprecher</strong>
+              <small>Ausgabe ueber den verbundenen Audioausgang</small>
+            </span>
+          </label>
 
           <div className="recording-meta-strip">
             <label className="recording-name-field">
