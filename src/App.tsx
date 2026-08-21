@@ -93,6 +93,15 @@ type PlaybackSettings = Pick<
   "bluetoothLatencyMs" | "playbackGain" | "amplitudeGain" | "equalizerLow" | "equalizerMid" | "equalizerHigh"
 >;
 
+type PlaybackGraph = {
+  context: AudioContext;
+  source: MediaElementAudioSourceNode;
+  low: BiquadFilterNode;
+  mid: BiquadFilterNode;
+  high: BiquadFilterNode;
+  gain: GainNode;
+};
+
 const fallbackVoices: ElevenLabsVoice[] = [
   { id: "JBFqnCBsd6RMkjVDRZzb", name: "Standard maennlich" },
   { id: "EXAVITQu4vr4xnSDxMaL", name: "Standard weiblich" }
@@ -2528,6 +2537,7 @@ function ElevenLabsControls({
   const [localAudioUrl, setLocalAudioUrl] = useState(() => audioUrl ?? "");
   const [playbackHint, setPlaybackHint] = useState("");
   const elevenAudioRef = useRef<HTMLAudioElement>(null);
+  const audioGraphRef = useRef<PlaybackGraph | null>(null);
   const readyAudioUrl = localAudioUrl || audioUrl || "";
 
   useEffect(() => {
@@ -2551,7 +2561,8 @@ function ElevenLabsControls({
       const player = elevenAudioRef.current;
       if (player) {
         player.src = generatedUrl;
-        player.volume = clampPlaybackVolume(playbackSettings?.playbackGain ?? 1);
+        applyPlaybackSettings(player, audioGraphRef, playbackSettings);
+        await audioGraphRef.current?.context.resume().catch(() => undefined);
         await player.play();
         setPlaybackHint("");
       } else {
@@ -2573,6 +2584,7 @@ function ElevenLabsControls({
             audioUrl={readyAudioUrl}
             label="Vorlesen"
             playbackSettings={playbackSettings}
+            audioGraphRef={audioGraphRef}
           />
         </div>
       ) : null}
@@ -2602,20 +2614,24 @@ function RoundAudioToggle({
   audioRef,
   audioUrl,
   label,
-  playbackSettings
+  playbackSettings,
+  audioGraphRef: externalAudioGraphRef
 }: {
   audioRef: RefObject<HTMLAudioElement | null>;
   audioUrl: string;
   label: string;
   playbackSettings?: PlaybackSettings;
+  audioGraphRef?: RefObject<PlaybackGraph | null>;
 }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const playbackGain = playbackSettings?.playbackGain ?? 1;
+  const internalAudioGraphRef = useRef<PlaybackGraph | null>(null);
+  const audioGraphRef = externalAudioGraphRef ?? internalAudioGraphRef;
 
   useEffect(() => {
     const player = audioRef.current;
     if (!player) return undefined;
-    player.volume = clampPlaybackVolume(playbackGain);
+    applyPlaybackSettings(player, audioGraphRef, playbackSettings);
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
     const handleEnded = () => setIsPlaying(false);
@@ -2627,7 +2643,7 @@ function RoundAudioToggle({
       player.removeEventListener("pause", handlePause);
       player.removeEventListener("ended", handleEnded);
     };
-  }, [audioRef, playbackGain]);
+  }, [audioRef, playbackGain, playbackSettings]);
 
   function toggle() {
     const player = audioRef.current;
@@ -2639,8 +2655,12 @@ function RoundAudioToggle({
       return;
     }
     player.src = audioUrl;
-    player.volume = clampPlaybackVolume(playbackGain);
-    player.play().catch(() => setIsPlaying(false));
+    const play = async () => {
+      applyPlaybackSettings(player, audioGraphRef, playbackSettings);
+      await audioGraphRef.current?.context.resume().catch(() => undefined);
+      await player.play();
+    };
+    play().catch(() => setIsPlaying(false));
   }
 
   return (
@@ -2737,6 +2757,54 @@ function stripSpeakerLabels(text: string): string {
 function seek(audioRef: RefObject<HTMLAudioElement | null>, seconds: number) {
   if (!audioRef.current) return;
   audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime + seconds);
+}
+
+function applyPlaybackSettings(
+  player: HTMLAudioElement,
+  graphRef: RefObject<PlaybackGraph | null>,
+  settings?: PlaybackSettings
+) {
+  player.volume = 1;
+  const AudioContextCtor =
+    window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextCtor) {
+    player.volume = clampPlaybackVolume(settings?.playbackGain ?? 1);
+    return;
+  }
+
+  try {
+    if (!graphRef.current) {
+      const context = new AudioContextCtor();
+      const source = context.createMediaElementSource(player);
+      const low = context.createBiquadFilter();
+      const mid = context.createBiquadFilter();
+      const high = context.createBiquadFilter();
+      const gain = context.createGain();
+
+      low.type = "lowshelf";
+      low.frequency.value = 160;
+      mid.type = "peaking";
+      mid.frequency.value = 1000;
+      mid.Q.value = 0.9;
+      high.type = "highshelf";
+      high.frequency.value = 4200;
+
+      source.connect(low);
+      low.connect(mid);
+      mid.connect(high);
+      high.connect(gain);
+      gain.connect(context.destination);
+      graphRef.current = { context, source, low, mid, high, gain };
+    }
+
+    const graph = graphRef.current;
+    graph.low.gain.value = settings?.equalizerLow ?? 0;
+    graph.mid.gain.value = settings?.equalizerMid ?? 0;
+    graph.high.gain.value = settings?.equalizerHigh ?? 0;
+    graph.gain.gain.value = Math.max(0.05, Math.min(2, settings?.playbackGain ?? 1));
+  } catch {
+    player.volume = clampPlaybackVolume(settings?.playbackGain ?? 1);
+  }
 }
 
 function clampPlaybackVolume(value: number): number {
