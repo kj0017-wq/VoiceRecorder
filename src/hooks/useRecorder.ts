@@ -38,6 +38,7 @@ export function useRecorder(): RecorderResult {
   const elapsedBeforePauseRef = useRef(0);
   const analyserFrameRef = useRef<number | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const noiseFloorRef = useRef(0);
 
   const requestScreenWakeLock = useCallback(async () => {
     if (!("wakeLock" in navigator) || wakeLockRef.current) return;
@@ -81,6 +82,8 @@ export function useRecorder(): RecorderResult {
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = 0.58;
     const data = new Uint8Array(analyser.fftSize);
+    let calibrationFrames = 0;
+    let calibrationSum = 0;
     source.connect(analyser);
     if (monitorOutput) {
       const monitorGain = audioContext.createGain();
@@ -107,11 +110,23 @@ export function useRecorder(): RecorderResult {
       }
 
       const rms = Math.sqrt(sumSquares / data.length);
-      const nextDecibels = Math.max(-60, Math.min(0, 20 * Math.log10(rms || 0.0001)));
-      const visibleLevel = Math.min(100, Math.round(Math.pow(Math.min(1, rms * 24), 0.58) * 100));
+      if (calibrationFrames < 24) {
+        calibrationFrames += 1;
+        calibrationSum += rms;
+        noiseFloorRef.current = calibrationSum / calibrationFrames;
+      }
+
+      const adjustedRms = Math.max(0, rms - noiseFloorRef.current * 1.12);
+      const nextDecibels = Math.max(-60, Math.min(0, 20 * Math.log10(adjustedRms || 0.0001)));
+      const visibleLevel = Math.min(100, Math.round(Math.pow(Math.min(1, adjustedRms * 32), 0.58) * 100));
       setDecibels(Math.round(nextDecibels));
       setVolume(visibleLevel);
-      setWaveform(samples);
+      const noiseGate = Math.min(0.85, Math.pow(noiseFloorRef.current * 1.12, 0.62) * 1.85);
+      setWaveform(samples.map((sample) => {
+        const absSample = Math.abs(sample);
+        if (absSample <= noiseGate) return 0;
+        return Math.sign(sample) * Math.min(1, (absSample - noiseGate) / Math.max(0.001, 1 - noiseGate));
+      }));
       analyserFrameRef.current = requestAnimationFrame(tick);
     };
 
