@@ -211,7 +211,7 @@ export function App() {
 
   useEffect(() => {
     const themeMeta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-    themeMeta?.setAttribute("content", batteryDimmed ? "#020617" : "#f8fafc");
+    themeMeta?.setAttribute("content", batteryDimmed ? "#020617" : "#000000");
   }, [batteryDimmed]);
 
   useEffect(() => {
@@ -724,7 +724,7 @@ function AuthScreen({ onNotice, notice }: { onNotice: (message: string) => void;
 
   useEffect(() => {
     const themeMeta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-    const previousColor = themeMeta?.getAttribute("content") ?? "#f8fafc";
+    const previousColor = themeMeta?.getAttribute("content") ?? "#000000";
     themeMeta?.setAttribute("content", "#000000");
     return () => themeMeta?.setAttribute("content", previousColor);
   }, []);

@@ -12,8 +12,8 @@ export default defineConfig({
         name: "Gesprächsarchiv KI",
         short_name: "Gespräche",
         description: "Aufnehmen, transkribieren und als strukturiertes Protokoll archivieren.",
-        theme_color: "#f8fafc",
-        background_color: "#f8fafc",
+        theme_color: "#000000",
+        background_color: "#000000",
         display: "standalone",
         start_url: "/",
         icons: [
