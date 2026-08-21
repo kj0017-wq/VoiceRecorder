@@ -101,14 +101,14 @@ export function useRecorder(): RecorderResult {
         sumSquares += normalized * normalized;
         if (index % sampleStep === 0 && samples.length < 48) {
           const sign = normalized < 0 ? -1 : 1;
-          const sensitive = Math.pow(Math.abs(normalized), 0.48) * 3.5;
+          const sensitive = Math.pow(Math.abs(normalized), 0.62) * 1.85;
           samples.push(sign * Math.max(0, Math.min(1, sensitive)));
         }
       }
 
       const rms = Math.sqrt(sumSquares / data.length);
       const nextDecibels = Math.max(-60, Math.min(0, 20 * Math.log10(rms || 0.0001)));
-      const visibleLevel = Math.min(100, Math.round(Math.pow(Math.min(1, rms * 55), 0.42) * 100));
+      const visibleLevel = Math.min(100, Math.round(Math.pow(Math.min(1, rms * 24), 0.58) * 100));
       setDecibels(Math.round(nextDecibels));
       setVolume(visibleLevel);
       setWaveform(samples);

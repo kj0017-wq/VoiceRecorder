@@ -1125,7 +1125,7 @@ function EqualizerScreen({
       ...settings,
       bluetoothLatencyMs: 180,
       playbackGain: 1.25,
-      amplitudeGain: 2.4,
+      amplitudeGain: 1.35,
       equalizerLow: -2,
       equalizerMid: 3,
       equalizerHigh: 4
