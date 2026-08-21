@@ -1129,7 +1129,7 @@ function LatestRecordingDetail({
   onBack: () => void;
   onDelete: () => void;
   onRename: (title: string) => Promise<void>;
-  onRetry: (mode: "transcript" | "summary") => void;
+  onRetry: (mode: "transcript" | "summary") => Promise<void> | void;
   onGenerateSpeech: (
     kind: "summary" | "transcript" | "translation" | "transcriptTranslation",
     targetLanguage?: string
@@ -1236,13 +1236,19 @@ function LatestRecordingDetail({
           isOpen={openPanel === "transcript"}
           onClick={() => setOpenPanel((current) => (current === "transcript" ? "" : "transcript"))}
           audioControl={
-            recording.transcript.length ? (
-              <ElevenLabsControls
-                audioUrl={recording.elevenLabsTranscriptAudioUrl}
-                storageKey={`elevenlabs:${recording.id}:transcript`}
-                onGenerate={() => onGenerateSpeech("transcript")}
-              />
-            ) : null
+            <ElevenLabsControls
+              audioUrl={recording.elevenLabsTranscriptAudioUrl}
+              storageKey={`elevenlabs:${recording.id}:transcript`}
+              onPrepare={
+                recording.transcript.length
+                  ? undefined
+                  : async () => {
+                      await onRetry("transcript");
+                      return "Transkript wird erstellt. Danach kann es vorgelesen werden.";
+                    }
+              }
+              onGenerate={() => onGenerateSpeech("transcript")}
+            />
           }
         >
           <LatestTranscriptBlock recording={recording} onCreate={() => onRetry("transcript")} />
@@ -1353,7 +1359,7 @@ function LatestContentRow({
   );
 }
 
-function LatestTranscriptBlock({ recording, onCreate }: { recording: Recording; onCreate: () => void }) {
+function LatestTranscriptBlock({ recording, onCreate }: { recording: Recording; onCreate: () => Promise<void> | void }) {
   if (recording.errorMessage) {
     return (
       <>
@@ -1595,7 +1601,7 @@ function RecordingCluster({
   onToggle: () => void;
   onDelete: () => void;
   onRename: (title: string) => Promise<void>;
-  onRetry: (mode: "transcript" | "summary") => void;
+  onRetry: (mode: "transcript" | "summary") => Promise<void> | void;
   onGenerateSpeech: (
     kind: "summary" | "transcript" | "translation" | "transcriptTranslation",
     targetLanguage?: string
@@ -1988,7 +1994,7 @@ function SimpleTranscript({
   onGenerateTranslationSpeech
 }: {
   recording: Recording;
-  onCreate: () => void;
+  onCreate: () => Promise<void> | void;
   onGenerateSpeech: () => Promise<string>;
   onTranslate: (targetLanguage: string) => Promise<void>;
   onGenerateTranslationSpeech: (targetLanguage: string) => Promise<string>;
@@ -2020,10 +2026,22 @@ function SimpleTranscript({
   if (!recording.transcript.length) {
     return (
       <section className="simple-transcript">
-        <button className="section-toggle" onClick={() => setIsOpen((current) => !current)} aria-expanded={isOpen}>
-          <h3>Transkript</h3>
-          <strong>{isOpen ? "Schließen" : "Öffnen"}</strong>
-        </button>
+        <div className="section-heading-row">
+          <button className="section-toggle" onClick={() => setIsOpen((current) => !current)} aria-expanded={isOpen}>
+            <h3>Transkript</h3>
+            <strong>{isOpen ? "Schließen" : "Öffnen"}</strong>
+          </button>
+          {recording.audioUrl && recording.status !== "transcribing" && recording.status !== "analyzing" ? (
+            <ElevenLabsControls
+              storageKey={`elevenlabs:${recording.id}:transcript`}
+              onPrepare={async () => {
+                await onCreate();
+                return "Transkript wird erstellt. Danach kann es vorgelesen werden.";
+              }}
+              onGenerate={onGenerateSpeech}
+            />
+          ) : null}
+        </div>
         {isOpen ? (
           <div className="lazy-processing-action">
             <p className="muted">
@@ -2088,7 +2106,7 @@ function SimpleSummary({
   onGenerateSpeech
 }: {
   recording: Recording;
-  onCreate: () => void;
+  onCreate: () => Promise<void> | void;
   onGenerateSpeech: () => Promise<string>;
 }) {
   const summary = getRecordingSummaryText(recording);
@@ -2340,10 +2358,12 @@ function SimpleTranslation({
 function ElevenLabsControls({
   audioUrl,
   storageKey,
+  onPrepare,
   onGenerate
 }: {
   audioUrl?: string;
   storageKey: string;
+  onPrepare?: () => Promise<string | void>;
   onGenerate: () => Promise<string>;
 }) {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -2363,6 +2383,11 @@ function ElevenLabsControls({
     setIsGenerating(true);
     setPlaybackHint("");
     try {
+      const prepareMessage = await onPrepare?.();
+      if (prepareMessage) {
+        setPlaybackHint(prepareMessage);
+        return;
+      }
       const generatedUrl = await onGenerate();
       if (!generatedUrl) {
         throw new Error("Keine ElevenLabs-Audiodatei erhalten.");
