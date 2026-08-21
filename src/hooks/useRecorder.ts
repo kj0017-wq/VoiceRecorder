@@ -103,7 +103,7 @@ export function useRecorder(): RecorderResult {
       setWaveform(Array(48).fill(0));
       setDecibels(-60);
       setVolume(0);
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await getPreferredMicrophoneStream();
       streamRef.current = stream;
       const mimeType = getSupportedMimeType();
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
@@ -204,4 +204,59 @@ function getSupportedMimeType(): string {
     ""
   ];
   return candidates.find((candidate) => !candidate || MediaRecorder.isTypeSupported(candidate)) ?? "";
+}
+
+async function getPreferredMicrophoneStream(): Promise<MediaStream> {
+  const baseConstraints: MediaStreamConstraints = {
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true
+    }
+  };
+
+  const initialStream = await navigator.mediaDevices.getUserMedia(baseConstraints);
+
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const preferredInput = findBuiltInMicrophone(devices);
+    if (!preferredInput?.deviceId) return initialStream;
+
+    const currentDeviceId = initialStream.getAudioTracks()[0]?.getSettings().deviceId;
+    if (currentDeviceId === preferredInput.deviceId) return initialStream;
+
+    const preferredStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        deviceId: { exact: preferredInput.deviceId },
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
+    });
+
+    initialStream.getTracks().forEach((track) => track.stop());
+    return preferredStream;
+  } catch {
+    return initialStream;
+  }
+}
+
+function findBuiltInMicrophone(devices: MediaDeviceInfo[]): MediaDeviceInfo | undefined {
+  const audioInputs = devices.filter((device) => device.kind === "audioinput");
+  if (!audioInputs.length) return undefined;
+
+  const blockedTerms = ["bluetooth", "headset", "headphone", "airpods", "buds", "hands-free", "handsfree", "speaker"];
+  const preferredTerms = ["default", "built-in", "builtin", "internal", "iphone", "ipad", "phone", "microphone", "mikrofon"];
+
+  return (
+    audioInputs.find((device) => {
+      const label = device.label.toLowerCase();
+      return preferredTerms.some((term) => label.includes(term)) && !blockedTerms.some((term) => label.includes(term));
+    }) ??
+    audioInputs.find((device) => {
+      const label = device.label.toLowerCase();
+      return !blockedTerms.some((term) => label.includes(term));
+    }) ??
+    audioInputs[0]
+  );
 }
