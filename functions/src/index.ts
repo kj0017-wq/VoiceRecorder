@@ -439,15 +439,16 @@ async function analyzeTranscript(transcript: string, model: string) {
       {
         role: "system",
         content:
-          "Du analysierst Gesprächstranskripte. Erfinde keine Informationen. Wenn Daten fehlen, nutze leere Arrays oder leere Strings. Antworte ausschließlich als JSON."
+          "Du analysierst Gesprächstranskripte. Erfinde keine Informationen. Schreibe shortSummary und summary immer auf Deutsch, auch wenn das Transkript eine andere Sprache enthält. Wenn Daten fehlen, nutze leere Arrays oder leere Strings. Antworte ausschließlich als JSON."
       },
       {
         role: "user",
         content: JSON.stringify({
           transcript,
+          languageInstruction: "shortSummary und summary muessen standardmaessig auf Deutsch sein.",
           schema: {
-            shortSummary: "3-5 Sätze",
-            summary: "Ausführliche, nach Themen strukturierte Zusammenfassung",
+            shortSummary: "3-5 Saetze auf Deutsch",
+            summary: "Ausfuehrliche, nach Themen strukturierte Zusammenfassung auf Deutsch",
             topics: ["Hauptthema"],
             decisions: ["Beschluss"],
             tasks: [
