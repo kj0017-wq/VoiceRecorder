@@ -5,9 +5,16 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import OpenAI from "openai";
 import { createHash } from "node:crypto";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
 
 initializeApp();
 
+const require = createRequire(import.meta.url);
+const ffmpeg = require("@ffmpeg-installer/ffmpeg") as { path: string };
 const db = getFirestore();
 const openaiApiKey = defineSecret("OPENAI_API_KEY");
 const elevenLabsApiKey = defineSecret("ELEVENLABS_API_KEY");
@@ -16,6 +23,8 @@ const dropboxAppSecret = defineSecret("DROPBOX_APP_SECRET");
 const dropboxRefreshToken = defineSecret("DROPBOX_REFRESH_TOKEN");
 const adminEmails = new Set(["kj_privat@yahoo.de"]);
 const fallbackFemaleVoiceId = "EXAVITQu4vr4xnSDxMaL";
+const maxDirectTranscriptionBytes = 24 * 1024 * 1024;
+const transcriptionChunkSeconds = 10 * 60;
 
 export const getAccessState = onCall(async (request) => {
   const email = normalizeEmail(request.auth?.token.email);
@@ -113,7 +122,7 @@ export const getElevenLabsVoices = onCall({ secrets: [elevenLabsApiKey] }, async
   };
 });
 
-export const processRecording = onCall({ secrets: [openaiApiKey] }, async (request) => {
+export const processRecording = onCall({ secrets: [openaiApiKey], timeoutSeconds: 540, memory: "1GiB" }, async (request) => {
   const uid = request.auth?.uid;
   const recordingId = request.data?.recordingId;
   const mode = request.data?.mode === "transcript" ? "transcript" : "summary";
@@ -415,9 +424,31 @@ async function transcribeFromUrl(audioUrl: string) {
     throw new Error("Audio konnte nicht geladen werden.");
   }
 
-  const audioBlob = await response.blob();
-  const contentType = audioBlob.type || response.headers.get("content-type") || "audio/webm";
-  const file = new File([audioBlob], getAudioFileName(contentType), { type: contentType });
+  const contentType = response.headers.get("content-type") || "audio/webm";
+  const audioBuffer = Buffer.from(await response.arrayBuffer());
+  if (audioBuffer.byteLength <= maxDirectTranscriptionBytes) {
+    return transcribeAudioBuffer(audioBuffer, contentType);
+  }
+
+  const chunks = await splitAudioForTranscription(audioBuffer, contentType);
+  const chunkTranscripts = [];
+  for (const chunk of chunks) {
+    chunkTranscripts.push(await transcribeAudioBuffer(chunk.buffer, chunk.contentType, chunk.offsetSeconds, chunk.index));
+  }
+
+  return {
+    text: chunkTranscripts.map((transcript) => transcript.text).join(" ").trim(),
+    language: chunkTranscripts.find((transcript) => transcript.language)?.language ?? "",
+    segments: chunkTranscripts.flatMap((transcript) => transcript.segments)
+  };
+}
+
+async function transcribeAudioBuffer(audioBuffer: Buffer, contentType: string, offsetSeconds = 0, chunkIndex = 0) {
+  const fileBuffer = audioBuffer.buffer.slice(
+    audioBuffer.byteOffset,
+    audioBuffer.byteOffset + audioBuffer.byteLength
+  ) as ArrayBuffer;
+  const file = new File([fileBuffer], getAudioFileName(contentType), { type: contentType });
   const transcription = (await getOpenAI().audio.transcriptions.create({
     file,
     model: "gpt-4o-transcribe-diarize",
@@ -428,13 +459,77 @@ async function transcribeFromUrl(audioUrl: string) {
     string,
     unknown
   >;
-  const diarizedSegments = extractDiarizedSegments(transcription);
+  const diarizedSegments = extractDiarizedSegments(transcription, offsetSeconds, chunkIndex);
 
   return {
     text: String(transcription.text ?? diarizedSegments.map((segment) => segment.text).join(" ")),
     language: "language" in transcription ? String(transcription.language ?? "") : "",
     segments: diarizedSegments
   };
+}
+
+async function splitAudioForTranscription(audioBuffer: Buffer, contentType: string) {
+  const tempDir = await mkdtemp(path.join(tmpdir(), "voice-recorder-transcribe-"));
+  try {
+    const inputPath = path.join(tempDir, getAudioFileName(contentType));
+    const outputPattern = path.join(tempDir, "chunk-%03d.mp3");
+    await writeFile(inputPath, audioBuffer);
+    await runFfmpeg([
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-i",
+      inputPath,
+      "-vn",
+      "-ac",
+      "1",
+      "-ar",
+      "16000",
+      "-b:a",
+      "64k",
+      "-f",
+      "segment",
+      "-segment_time",
+      String(transcriptionChunkSeconds),
+      "-reset_timestamps",
+      "1",
+      outputPattern
+    ]);
+
+    const chunkNames = (await readdir(tempDir)).filter((name) => /^chunk-\d+\.mp3$/.test(name)).sort();
+    if (!chunkNames.length) {
+      throw new Error("Audio konnte nicht in Transkriptionsabschnitte geteilt werden.");
+    }
+
+    return Promise.all(
+      chunkNames.map(async (name, index) => ({
+        index,
+        offsetSeconds: index * transcriptionChunkSeconds,
+        contentType: "audio/mpeg",
+        buffer: await readFile(path.join(tempDir, name))
+      }))
+    );
+  } finally {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+function runFfmpeg(args: string[]) {
+  return new Promise<void>((resolve, reject) => {
+    const child = spawn(ffmpeg.path, args);
+    let stderr = "";
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(stderr.trim() || `FFmpeg wurde mit Code ${code} beendet.`));
+    });
+  });
 }
 
 function getElevenLabsAudioField(
@@ -673,15 +768,15 @@ function assertAdmin(emailValue: unknown): string {
   return email;
 }
 
-function extractDiarizedSegments(transcription: Record<string, unknown>) {
+function extractDiarizedSegments(transcription: Record<string, unknown>, offsetSeconds = 0, chunkIndex = 0) {
   const rawSegments = Array.isArray(transcription.segments) ? transcription.segments : [];
 
   if (!rawSegments.length) {
     return [
       {
-        id: "segment-1",
-        start: 0,
-        end: 0,
+        id: `chunk-${chunkIndex + 1}-segment-1`,
+        start: offsetSeconds,
+        end: offsetSeconds,
         speaker: "Sprecher 1",
         text: String(transcription.text ?? "")
       }
@@ -693,9 +788,9 @@ function extractDiarizedSegments(transcription: Record<string, unknown>) {
     const speaker = String(segment.speaker ?? "A");
 
     return {
-      id: String(segment.id ?? `segment-${index + 1}`),
-      start: Number(segment.start ?? 0),
-      end: Number(segment.end ?? 0),
+      id: `chunk-${chunkIndex + 1}-${String(segment.id ?? `segment-${index + 1}`)}`,
+      start: Number(segment.start ?? 0) + offsetSeconds,
+      end: Number(segment.end ?? 0) + offsetSeconds,
       speaker: speaker.startsWith("Sprecher") ? speaker : `Sprecher ${speaker}`,
       text: String(segment.text ?? "")
     };

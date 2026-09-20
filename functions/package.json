@@ -8,6 +8,7 @@
     "build": "tsc"
   },
   "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "firebase-admin": "^13.0.2",
     "firebase-functions": "^6.1.1",
     "openai": "^4.77.0"
