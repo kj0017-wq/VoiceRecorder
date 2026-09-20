@@ -180,6 +180,11 @@ export function App() {
     () => recordings.find((recording) => recording.id === selectedId) ?? latestRecording ?? filtered[0],
     [filtered, latestRecording, recordings, selectedId]
   );
+  const storageUsage = useMemo(() => {
+    const knownBytes = recordings.reduce((total, recording) => total + (recording.audioBytes ?? 0), 0);
+    const unknownCount = recordings.filter((recording) => recording.audioBytes === undefined).length;
+    return { knownBytes, unknownCount };
+  }, [recordings]);
 
   function openRecordingInPlayback(recording: Recording) {
     setSelectedId(recording.id);
@@ -638,6 +643,11 @@ export function App() {
             </section>
           ) : mode === "archive" ? (
             <section className="detail-panel archive-list-panel">
+              <div className="storage-summary">
+                <span>Audiospeicher</span>
+                <strong>{formatBytes(storageUsage.knownBytes)}</strong>
+                {storageUsage.unknownCount ? <em>{storageUsage.unknownCount} ältere ohne Größenangabe</em> : null}
+              </div>
               {filtered.length ? (
                 <div className="recording-list archive-only-list">
                   {filtered.map((recording) => (
@@ -1940,7 +1950,9 @@ function ArchiveRecordingItem({
       >
         <span className={`status-dot status-${recording.status}`} />
         <strong>{recording.title}</strong>
-        <span>{formatDateTime(recording.createdAt)} · {formatDuration(recording.duration)}</span>
+        <span>
+          {formatDateTime(recording.createdAt)} · {formatDuration(recording.duration)} · {formatBytes(recording.audioBytes)}
+        </span>
       </button>
     </div>
   );
@@ -1991,6 +2003,20 @@ function formatDigitalDuration(seconds: number): string {
   const minutes = Math.floor((safeSeconds % 3600) / 60);
   const rest = safeSeconds % 60;
   return [hours, minutes, rest].map((part) => String(part).padStart(2, "0")).join(":");
+}
+
+function formatBytes(bytes: number | undefined): string {
+  if (bytes === undefined || !Number.isFinite(bytes)) return "Größe unbekannt";
+  if (bytes <= 0) return "0 KB";
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  const digits = value >= 10 || unitIndex === 0 ? 0 : 1;
+  return `${value.toFixed(digits)} ${units[unitIndex]}`;
 }
 
 function formatRecorderDate(value: Date): string {

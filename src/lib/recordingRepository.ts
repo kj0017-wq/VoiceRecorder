@@ -63,6 +63,7 @@ export async function createRecordingFromAudio(
     participants: [],
     createdAt: now.toISOString(),
     duration,
+    audioBytes: file.size,
     language: "",
     audioUrl: "",
     status: "uploading",
@@ -111,6 +112,7 @@ export async function createRecordingFromAudio(
       audioUrl,
       status: "ready",
       shortSummary: "",
+      audioBytes: file.size,
       createdAt: serverTimestamp()
     });
 
@@ -119,7 +121,8 @@ export async function createRecordingFromAudio(
       ...baseRecording,
       audioUrl,
       status: "ready",
-      shortSummary: ""
+      shortSummary: "",
+      audioBytes: file.size
     };
   } catch {
     return createLocalRecording(file, {
@@ -329,6 +332,7 @@ function normalizeRecording(id: string, data: DocumentData): Recording {
     participants: Array.isArray(data.participants) ? data.participants : [],
     createdAt,
     duration: Number(data.duration ?? 0),
+    audioBytes: Number.isFinite(Number(data.audioBytes)) ? Number(data.audioBytes) : undefined,
     language: String(data.language ?? ""),
     audioUrl: String(data.audioUrl ?? ""),
     status: data.status ?? "uploading",

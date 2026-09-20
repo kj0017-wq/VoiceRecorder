@@ -39,6 +39,7 @@ export interface Recording {
   participants: string[];
   createdAt: string;
   duration: number;
+  audioBytes?: number;
   language: string;
   audioUrl: string;
   status: RecordingStatus;
