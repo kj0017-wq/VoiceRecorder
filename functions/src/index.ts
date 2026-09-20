@@ -24,7 +24,8 @@ const dropboxRefreshToken = defineSecret("DROPBOX_REFRESH_TOKEN");
 const adminEmails = new Set(["kj_privat@yahoo.de"]);
 const fallbackFemaleVoiceId = "EXAVITQu4vr4xnSDxMaL";
 const maxDirectTranscriptionBytes = 24 * 1024 * 1024;
-const transcriptionChunkSeconds = 10 * 60;
+const maxDirectTranscriptionSeconds = 8 * 60;
+const transcriptionChunkSeconds = 5 * 60;
 
 export const getAccessState = onCall(async (request) => {
   const email = normalizeEmail(request.auth?.token.email);
@@ -153,7 +154,7 @@ export const processRecording = onCall({ secrets: [openaiApiKey], timeoutSeconds
 
     if (!transcriptText) {
       await recordingRef.update({ status: "transcribing" });
-      const transcript = await transcribeFromUrl(recording.audioUrl);
+      const transcript = await transcribeFromUrl(recording.audioUrl, Number(recording.duration ?? 0));
       transcriptSegments = transcript.segments;
       transcriptText = transcript.text;
       await recordingRef.update({
@@ -418,7 +419,7 @@ export const exportRecordingToDropbox = onCall(
   }
 );
 
-async function transcribeFromUrl(audioUrl: string) {
+async function transcribeFromUrl(audioUrl: string, durationSeconds = 0) {
   const response = await fetch(audioUrl);
   if (!response.ok) {
     throw new Error("Audio konnte nicht geladen werden.");
@@ -426,13 +427,29 @@ async function transcribeFromUrl(audioUrl: string) {
 
   const contentType = response.headers.get("content-type") || "audio/webm";
   const audioBuffer = Buffer.from(await response.arrayBuffer());
-  if (audioBuffer.byteLength <= maxDirectTranscriptionBytes) {
+  const shouldSplit =
+    audioBuffer.byteLength > maxDirectTranscriptionBytes ||
+    (Number.isFinite(durationSeconds) && durationSeconds > maxDirectTranscriptionSeconds);
+
+  console.info("Transcription input", {
+    bytes: audioBuffer.byteLength,
+    durationSeconds,
+    shouldSplit
+  });
+
+  if (!shouldSplit) {
     return transcribeAudioBuffer(audioBuffer, contentType);
   }
 
   const chunks = await splitAudioForTranscription(audioBuffer, contentType);
   const chunkTranscripts = [];
   for (const chunk of chunks) {
+    console.info("Transcribing chunk", {
+      chunk: chunk.index + 1,
+      total: chunks.length,
+      bytes: chunk.buffer.byteLength,
+      offsetSeconds: chunk.offsetSeconds
+    });
     chunkTranscripts.push(await transcribeAudioBuffer(chunk.buffer, chunk.contentType, chunk.offsetSeconds, chunk.index));
   }
 
