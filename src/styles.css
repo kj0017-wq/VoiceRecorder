@@ -520,8 +520,8 @@ button {
 }
 
 .latest-app-shell .archive-only-list .recording-card.is-selected {
-  border-color: rgba(255, 49, 49, 0.72);
-  box-shadow: inset 0 0 0 1px rgba(255, 49, 49, 0.72), 0 16px 40px rgba(255, 26, 26, 0.12);
+  border-color: rgba(16, 185, 129, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.72), 0 16px 40px rgba(16, 185, 129, 0.1);
 }
 
 .latest-app-shell .archive-only-list .recording-card strong {

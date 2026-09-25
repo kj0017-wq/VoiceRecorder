@@ -1956,7 +1956,7 @@ function ArchiveRecordingItem({
           onOpen();
         }}
       >
-        <span className={`status-dot status-${recording.status}`} />
+        <span className={`status-dot status-${getArchiveAudioStatus(recording)}`} />
         <strong>{recording.title}</strong>
         <span>
           {formatDateTime(recording.createdAt)} · {formatDuration(recording.duration)} · {formatBytes(recording.audioBytes)}
@@ -1964,6 +1964,12 @@ function ArchiveRecordingItem({
       </button>
     </div>
   );
+}
+
+function getArchiveAudioStatus(recording: Recording): Recording["status"] {
+  if (recording.status === "error" && !recording.audioUrl) return "error";
+  if (recording.audioUrl) return "ready";
+  return recording.status;
 }
 
 function getAuthErrorMessage(error: unknown, kind: "login" | "register"): string {
