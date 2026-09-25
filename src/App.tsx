@@ -1309,7 +1309,7 @@ function LatestRecordingDetail({
   const [isTranslating, setIsTranslating] = useState(false);
   const summaryText = getRecordingSummaryText(recording);
   const translation =
-    recording.translations?.[targetLanguage] ?? (targetLanguage === "en" ? recording.englishTranslation : "");
+    recording.translations?.[targetLanguage] ?? (targetLanguage === "en" ? recording.englishTranslation ?? "" : "");
   const translationAudioUrl =
     recording.elevenLabsTranslationAudioUrls?.[targetLanguage] ??
     (targetLanguage === "en" ? recording.elevenLabsTranslationAudioUrl : undefined);
@@ -1416,6 +1416,12 @@ function LatestRecordingDetail({
             <ElevenLabsControls
               audioUrl={recording.elevenLabsTranscriptAudioUrl}
               storageKey={`elevenlabs:${recording.id}:transcript`}
+              cacheVersion={createClientSpeechCacheVersion(
+                recording.transcript.map((segment) => `${segment.speaker}:${segment.text}`).join("\n"),
+                "transcript",
+                "de",
+                playbackSettings
+              )}
               playbackSettings={playbackSettings}
               onPrepare={
                 recording.transcript.length
@@ -1442,6 +1448,7 @@ function LatestRecordingDetail({
             <ElevenLabsControls
               audioUrl={recording.elevenLabsSummaryAudioUrl}
               storageKey={`elevenlabs:${recording.id}:summary`}
+              cacheVersion={createClientSpeechCacheVersion(summaryText, "summary", "de", playbackSettings)}
               playbackSettings={playbackSettings}
               onPrepare={
                 summaryText
@@ -1474,6 +1481,7 @@ function LatestRecordingDetail({
             <ElevenLabsControls
               audioUrl={translationAudioUrl}
               storageKey={`elevenlabs:${recording.id}:summaryTranslation:${targetLanguage}`}
+              cacheVersion={createClientSpeechCacheVersion(translation, "translation", targetLanguage ?? "en", playbackSettings)}
               playbackSettings={playbackSettings}
               onPrepare={
                 translation
@@ -2555,26 +2563,33 @@ function SimpleTranslation({
 
 function ElevenLabsControls({
   audioUrl,
-  storageKey: _storageKey,
+  storageKey,
+  cacheVersion = "",
   playbackSettings,
   onPrepare,
   onGenerate
 }: {
   audioUrl?: string;
   storageKey: string;
+  cacheVersion?: string;
   playbackSettings?: PlaybackSettings;
   onPrepare?: () => Promise<string | void>;
   onGenerate: () => Promise<string>;
 }) {
   const [isGenerating, setIsGenerating] = useState(false);
-  const [localAudioUrl, setLocalAudioUrl] = useState(() => audioUrl ?? "");
+  const [localAudioUrl, setLocalAudioUrl] = useState(() => audioUrl ?? readCachedSpeechUrl(storageKey, cacheVersion));
   const [playbackHint, setPlaybackHint] = useState("");
   const elevenAudioRef = useRef<HTMLAudioElement>(null);
   const readyAudioUrl = localAudioUrl || audioUrl || "";
 
   useEffect(() => {
-    setLocalAudioUrl(audioUrl ?? "");
-  }, [audioUrl]);
+    if (audioUrl) {
+      writeCachedSpeechUrl(storageKey, cacheVersion, audioUrl);
+      setLocalAudioUrl(audioUrl);
+      return;
+    }
+    setLocalAudioUrl(readCachedSpeechUrl(storageKey, cacheVersion));
+  }, [audioUrl, cacheVersion, storageKey]);
 
   async function generate() {
     setIsGenerating(true);
@@ -2589,6 +2604,7 @@ function ElevenLabsControls({
       if (!generatedUrl) {
         throw new Error("Keine ElevenLabs-Audiodatei erhalten.");
       }
+      writeCachedSpeechUrl(storageKey, cacheVersion, generatedUrl);
       setLocalAudioUrl(generatedUrl);
       const player = elevenAudioRef.current;
       if (player) {
@@ -2777,6 +2793,42 @@ function stripSpeakerLabels(text: string): string {
     .replace(/(?:^|\s)(?:speaker|sprecher)\s+[a-z0-9]+:\s*/gi, " ")
     .replace(/\s{2,}/g, " ")
     .trim();
+}
+
+function createClientSpeechCacheVersion(
+  text: string,
+  kind: "summary" | "transcript" | "translation" | "transcriptTranslation",
+  targetLanguage: string,
+  playbackSettings?: PlaybackSettings
+): string {
+  const cleanText = normalizeDisplayText(text);
+  if (!cleanText) return "";
+  return JSON.stringify({
+    text: cleanText,
+    kind,
+    targetLanguage,
+    voiceId: (playbackSettings as typeof defaultVoiceSettings | undefined)?.voiceId ?? "",
+    stability: (playbackSettings as typeof defaultVoiceSettings | undefined)?.stability ?? "",
+    similarityBoost: (playbackSettings as typeof defaultVoiceSettings | undefined)?.similarityBoost ?? "",
+    style: (playbackSettings as typeof defaultVoiceSettings | undefined)?.style ?? "",
+    speed: (playbackSettings as typeof defaultVoiceSettings | undefined)?.speed ?? "",
+    languageVoices: (playbackSettings as typeof defaultVoiceSettings | undefined)?.languageVoices ?? {}
+  });
+}
+
+function readCachedSpeechUrl(storageKey: string, cacheVersion: string): string {
+  if (!cacheVersion) return "";
+  try {
+    const cached = JSON.parse(localStorage.getItem(storageKey) || "{}") as { version?: string; url?: string };
+    return cached.version === cacheVersion && typeof cached.url === "string" ? cached.url : "";
+  } catch {
+    return "";
+  }
+}
+
+function writeCachedSpeechUrl(storageKey: string, cacheVersion: string, url: string): void {
+  if (!cacheVersion || !url) return;
+  localStorage.setItem(storageKey, JSON.stringify({ version: cacheVersion, url }));
 }
 
 function seek(audioRef: RefObject<HTMLAudioElement | null>, seconds: number) {
