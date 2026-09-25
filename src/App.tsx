@@ -2598,7 +2598,9 @@ function ElevenLabsControls({
       const prepareMessage = await onPrepare?.();
       if (prepareMessage) {
         setPlaybackHint(prepareMessage);
-        return;
+        if (isBlockingPrepareMessage(prepareMessage)) {
+          return;
+        }
       }
       const generatedUrl = await onGenerate();
       if (!generatedUrl) {
@@ -2654,6 +2656,11 @@ function ElevenLabsControls({
       {playbackHint ? <p className="muted">{playbackHint}</p> : null}
     </div>
   );
+}
+
+function isBlockingPrepareMessage(message: string): boolean {
+  const normalized = message.trim().toLowerCase();
+  return normalized.startsWith("erst ") || normalized.startsWith("kein ");
 }
 
 function RoundAudioToggle({
