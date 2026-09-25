@@ -169,6 +169,10 @@ export const processRecording = onCall({ secrets: [openaiApiKey], timeoutSeconds
     }
 
     if (mode === "transcript") {
+      await recordingRef.update({
+        status: "ready",
+        errorMessage: FieldValue.delete()
+      });
       return { ok: true };
     }
 
